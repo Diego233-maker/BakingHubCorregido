@@ -14,11 +14,14 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # Con production, MP_MODO=simulado se rechaza a propósito (ver pagos.js): usa credenciales TEST- en modo real.
+      # Con production, MP_MODO=simulado se rechaza a propósito (ver pagos.js): usa credenciales de prueba en modo real.
       - key: NODE_ENV
         value: production
       - key: MP_MODO
         value: real
+      # true = credenciales de PRUEBA (aunque empiecen con APP_USR-). Quítalo o pon false al pasar a producción.
+      - key: MP_CREDENCIALES_PRUEBA
+        value: "true"
       - key: MP_METODOS
         value: tarjeta,oxxo,spei,mercadopago
       - key: JWT_SECRET

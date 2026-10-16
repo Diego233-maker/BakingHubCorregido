@@ -35,6 +35,11 @@ const FRONTEND_URL = (process.env.FRONTEND_URL ?? 'http://localhost:4321').repla
 const BACKEND_PUBLIC_URL = (process.env.BACKEND_PUBLIC_URL ?? '').replace(/\/$/, '');
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN ?? '';
 const MP_TEST_PAYER_EMAIL = process.env.MP_TEST_PAYER_EMAIL?.trim() ?? '';
+// ¿Son credenciales de PRUEBA? Mercado Pago ya no las distingue por el prefijo: las de prueba pueden empezar con
+// TEST- o con APP_USR-. Si las copiaste de "Pruebas → Credenciales de prueba" y empiezan con APP_USR-,
+// pon MP_CREDENCIALES_PRUEBA=true.
+const MP_CREDENCIALES_PRUEBA =
+  MP_ACCESS_TOKEN.startsWith('TEST-') || ['1', 'true', 'si', 'sí'].includes((process.env.MP_CREDENCIALES_PRUEBA ?? '').trim().toLowerCase());
 
 // En simulado cualquier cliente puede "simular" que pagó (mutation simularPago): jamás en producción.
 if (MODO === 'simulado' && process.env.NODE_ENV === 'production') {
@@ -48,11 +53,12 @@ if (MODO === 'real') {
     console.error('❌ MP_MODO=real pero falta MP_ACCESS_TOKEN en tu archivo .env');
     process.exit(1);
   }
-  if (MP_ACCESS_TOKEN.startsWith('TEST-') && !MP_TEST_PAYER_EMAIL) {
-    console.error('❌ MP_ACCESS_TOKEN es de prueba, pero falta MP_TEST_PAYER_EMAIL en tu archivo .env');
+  if (MP_CREDENCIALES_PRUEBA && !MP_TEST_PAYER_EMAIL) {
+    console.error('❌ Estás usando credenciales de prueba, pero falta MP_TEST_PAYER_EMAIL');
     console.error('   Configura el correo de una cuenta compradora de prueba creada para esta integración.');
     process.exit(1);
   }
+  console.log(MP_CREDENCIALES_PRUEBA ? '🧪 Mercado Pago: credenciales de PRUEBA (el comprador será MP_TEST_PAYER_EMAIL).' : '💳 Mercado Pago: credenciales de PRODUCCIÓN (cobros reales).');
   if (BACKEND_PUBLIC_URL && !process.env.MP_WEBHOOK_SECRET) {
     // Sin la clave secreta el webhook rechaza todos los avisos (401) y Mercado Pago los reintenta durante días.
     console.error('❌ Hay BACKEND_PUBLIC_URL pero falta MP_WEBHOOK_SECRET (Tus integraciones → Webhooks → clave secreta).');
@@ -220,7 +226,7 @@ async function crearCobroMercadoPago({ pedido, usuario, metodo, tarjeta }) {
     const expira = new Date(Date.now() + 2 * 3600_000); // el stock se libera si abandona el pago
     const bodyPref = {
       items: [{ id: String(pedido.id), title: `Pedido #${pedido.id} - Baking Hub`, quantity: 1, unit_price: monto, currency_id: 'MXN' }],
-      payer: { email: MP_ACCESS_TOKEN.startsWith('TEST-') ? MP_TEST_PAYER_EMAIL : usuario.email },
+      payer: { email: MP_CREDENCIALES_PRUEBA ? MP_TEST_PAYER_EMAIL : usuario.email },
       external_reference: String(pedido.id),
       notification_url,
       back_urls: {
@@ -242,9 +248,9 @@ async function crearCobroMercadoPago({ pedido, usuario, metodo, tarjeta }) {
     description: `Pedido #${pedido.id} - Baking Hub`,
     external_reference: String(pedido.id), // así el webhook sabe a qué pedido pertenece
     notification_url,
-    // Mercado Pago solo admite el correo del comprador de prueba al usar credenciales TEST-.
+    // Mercado Pago solo admite el correo del comprador de prueba al usar credenciales de prueba.
     payer: {
-      email: MP_ACCESS_TOKEN.startsWith('TEST-') ? MP_TEST_PAYER_EMAIL : usuario.email,
+      email: MP_CREDENCIALES_PRUEBA ? MP_TEST_PAYER_EMAIL : usuario.email,
       first_name: nombre,
       last_name: resto.join(' ') || nombre,
     },
