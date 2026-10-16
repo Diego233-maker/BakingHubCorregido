@@ -1,0 +1,123 @@
+/* Estilos de las islas del carrito y del checkout (React no tiene <style> con scope de Astro). */
+
+.carrito-lista {
+  list-style: none;
+  padding: 0;
+  margin: 1.5rem 0;
+  max-width: 560px;
+}
+
+.carrito-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.8rem 0;
+  border-bottom: 1px solid rgba(109, 88, 79, 0.12);
+  font-size: 1.05rem;
+}
+
+.carrito-cantidad {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.carrito-cantidad button {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: var(--soft-button-surface);
+  border: 1px solid rgba(120, 94, 82, 0.08);
+  color: var(--text);
+  font-size: 1rem;
+  line-height: 1;
+  box-shadow: 4px 4px 10px rgba(128, 103, 88, 0.12), -4px -4px 10px rgba(255,255,255,0.7);
+}
+
+.carrito-cantidad button:hover {
+  background: linear-gradient(135deg, var(--secondary), var(--primary));
+}
+
+.quitar-btn {
+  background: none;
+  color: var(--error-text);
+  font-size: 0.9rem;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.carrito-total {
+  font-size: 1.15rem;
+  margin: 0 0 1.25rem;
+}
+
+.checkout-btn {
+  display: inline-block;
+  background: var(--espresso);
+  color: var(--cream);
+  font-weight: 600;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  text-decoration: none;
+}
+
+.checkout-btn:hover {
+  background: var(--honey-dark);
+}
+
+.checkout-card {
+  background: var(--surface);
+  border: 1px solid rgba(120, 94, 82, 0.08);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem;
+  max-width: 400px;
+  box-shadow: var(--shadow-soft);
+}
+
+.checkout-card p {
+  color: var(--muted);
+  margin: 0 0 1.25rem;
+}
+
+.pagar-btn {
+  font-weight: 600;
+  padding: 0.9rem;
+  border-radius: 18px;
+  width: 100%;
+  color: #fff;
+  box-shadow: 8px 8px 18px rgba(165, 118, 91, 0.18), -6px -6px 14px rgba(255,255,255,0.7);
+}
+
+.pagar-btn.activo { background: linear-gradient(135deg, var(--primary), var(--primary-strong)); }
+
+.pagar-btn.procesando {
+  background: linear-gradient(135deg, #bca89a, #967d70);
+  cursor: not-allowed;
+}
+
+.cancelar-btn {
+  display: block;
+  margin-top: 0.75rem;
+  width: 100%;
+  padding: 0.7rem;
+  text-align: center;
+  text-decoration: none;
+  color: var(--muted);
+  border: 1px solid rgba(111, 90, 79, 0.14);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.22);
+}
+
+.cancelar-btn:hover { background: rgba(255,255,255,0.45); }
+
+@media (max-width: 520px) {
+  .carrito-item { grid-template-columns: 1fr auto; }
+}
+
+.carrito-cantidad button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.carrito-cantidad button:disabled:hover { background: var(--cream); }

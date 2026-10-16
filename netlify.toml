@@ -1,0 +1,7 @@
+# Netlify despliega SOLO el frontend. El backend va en Render (ver render.yaml).
+[build]
+  base    = "baking-hub-front"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "22"

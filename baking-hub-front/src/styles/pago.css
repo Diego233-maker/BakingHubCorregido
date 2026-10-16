@@ -1,0 +1,195 @@
+/* Estilos de la isla de checkout (métodos de pago, formulario de tarjeta y resumen). */
+
+.checkout-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
+  gap: clamp(1rem, 2.5vw, 1.75rem);
+  align-items: start;
+  width: 100%;
+  max-width: 1040px;
+}
+
+.checkout-main,
+.checkout-resumen {
+  background: var(--panel-surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: clamp(1rem, 2.5vw, 1.6rem);
+  box-shadow: var(--shadow-soft);
+}
+
+.checkout-main .pagar-btn { margin-top: 0.25rem; }
+
+/* ---------- Aviso modo simulado ---------- */
+.aviso-simulado {
+  background: var(--warning-surface);
+  border: 1px solid rgba(121, 91, 58, 0.12);
+  color: var(--warning-text);
+  border-radius: 16px;
+  padding: 0.75rem 1rem;
+  margin: 0 0 1.25rem;
+  font-size: 0.92rem;
+}
+
+/* ---------- Métodos de pago ---------- */
+.metodos-pago {
+  border: none;
+  padding: 0;
+  margin: 0 0 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.metodos-leyenda {
+  font-family: 'Fraunces', serif;
+  font-size: 1.22rem;
+  padding: 0;
+  margin-bottom: 0.75rem;
+}
+
+.metodo-opcion {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 0.85rem;
+  border: 1px solid rgba(120, 94, 82, 0.1);
+  border-radius: 18px;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  background: var(--option-surface);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+
+.metodo-opcion:hover { border-color: rgba(199, 120, 90, 0.5); transform: translateY(-1px); }
+
+.metodo-opcion.activa {
+  border-color: var(--primary-strong);
+  background: var(--selected-option-surface);
+  box-shadow: 0 0 0 1px rgba(199,120,90,0.4);
+}
+
+.metodo-opcion input { accent-color: var(--primary-strong); }
+
+.metodo-icono {
+  display: grid;
+  place-items: center;
+  width: 3.1rem;
+  height: 2.7rem;
+  border-radius: 13px;
+  background: var(--icon-surface);
+  box-shadow: var(--shadow-control);
+  color: var(--primary-strong);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.metodo-texto { display: flex; flex-direction: column; gap: 0.18rem; min-width: 0; }
+.metodo-texto strong { font-size: 0.96rem; line-height: 1.35; }
+.metodo-texto small { color: var(--muted); font-size: 0.9rem; line-height: 1.45; }
+
+.metodo-detalle {
+  border-top: 1px solid rgba(109, 88, 79, 0.12);
+  padding-top: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+/* ---------- Formulario de tarjeta ---------- */
+.tarjeta-form { display: flex; flex-direction: column; gap: 0.9rem; }
+
+.campo-pago { display: flex; flex-direction: column; gap: 0.3rem; }
+
+.campo-pago label {
+  font-size: 0.94rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.campo-pago input {
+  font: inherit;
+  font-size: 0.98rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(111, 90, 79, 0.1);
+  border-radius: 14px;
+  background: var(--input-surface);
+  color: var(--text);
+  box-shadow: var(--shadow-inset);
+}
+
+.campo-pago input:focus {
+  outline: 2px solid rgba(199,120,90,0.5);
+  outline-offset: 1px;
+  background: var(--surface);
+}
+
+.campo-pago input[aria-invalid='true'] { border-color: rgba(141, 74, 61, 0.55); }
+.campo-error { color: var(--error-text); font-size: 0.85rem; }
+
+/* Contenedores de los "Secure Fields" de Mercado Pago (iframes): sin altura propia se verían colapsados. */
+.mp-input-container {
+  height: 2.75rem;
+  padding: 0 0.8rem;
+  border: 1px solid rgba(111, 90, 79, 0.1);
+  border-radius: 14px;
+  background: var(--input-surface);
+  box-shadow: var(--shadow-inset);
+  display: flex;
+  align-items: center;
+}
+
+.mp-input-container iframe { width: 100%; }
+
+.aviso-sdk { color: var(--error-text); font-size: 0.9rem; margin: 0 0 0.6rem; }
+
+.fila-doble { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.9rem; }
+
+/* ---------- Instrucciones OXXO / SPEI / Mercado Pago ---------- */
+.instrucciones p { margin: 0 0 0.6rem; color: var(--text); }
+.instrucciones ol { margin: 0 0 0.9rem; padding-left: 1.25rem; color: var(--muted); display: flex; flex-direction: column; gap: 0.3rem; }
+.instrucciones .nota { font-size: 0.9rem; color: var(--muted); }
+
+.pagador { color: var(--muted); font-size: 0.9rem; margin: 0 0 1rem; }
+.seguridad { color: var(--muted); font-size: 0.84rem; line-height: 1.5; text-align: center; margin: 1rem 0 0; }
+
+/* ---------- Resumen ---------- */
+.checkout-resumen h3 { font-size: 1.15rem; margin-bottom: 0.9rem; }
+
+.checkout-resumen ul { list-style: none; padding: 0; margin: 0 0 0.9rem; }
+
+.checkout-resumen li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid rgba(109, 88, 79, 0.12);
+  font-size: 0.96rem;
+  line-height: 1.45;
+}
+
+.resumen-linea,
+.resumen-total {
+  display: flex;
+  justify-content: space-between;
+  margin: 0.4rem 0;
+  color: var(--muted);
+}
+
+.resumen-total { color: var(--text); font-size: 1.1rem; margin-top: 0.8rem; }
+.resumen-metodo { margin: 1rem 0 0; padding-top: 0.9rem; border-top: 1px solid rgba(109, 88, 79, 0.12); font-size: 0.92rem; color: var(--muted); }
+
+@media (max-width: 980px) {
+  .checkout-grid { grid-template-columns: 1fr; }
+  .checkout-resumen { order: -1; }
+}
+
+@media (max-width: 520px) {
+  .checkout-main,
+  .checkout-resumen { border-radius: 22px; }
+
+  .metodo-opcion { grid-template-columns: auto auto minmax(0, 1fr); gap: 0.65rem; padding: 0.8rem; }
+  .metodo-icono { width: 2.65rem; height: 2.45rem; }
+  .metodo-texto strong { font-size: 0.93rem; }
+  .metodo-texto small { font-size: 0.84rem; }
+  .checkout-resumen li { gap: 0.6rem; }
+}

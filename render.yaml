@@ -1,0 +1,40 @@
+# Blueprint de Render: solo el backend GraphQL (HTTP + WebSocket /subscriptions).
+# El frontend va en Netlify (ver netlify.toml).
+services:
+  - type: web
+    name: baking-hub-backend
+    runtime: node
+    rootDir: backend-practica-6-2
+    plan: free
+    # Importante: una sola instancia. La presencia de usuarios y las suscripciones viven en memoria.
+    numInstances: 1
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Con production, MP_MODO=simulado se rechaza a propósito (ver pagos.js): usa credenciales TEST- en modo real.
+      - key: NODE_ENV
+        value: production
+      - key: MP_MODO
+        value: real
+      - key: MP_METODOS
+        value: tarjeta,oxxo,spei,mercadopago
+      - key: JWT_SECRET
+        generateValue: true
+      # Los siguientes los capturas tú en el panel de Render (no se guardan en git):
+      - key: DATABASE_URL
+        sync: false
+      - key: MP_ACCESS_TOKEN
+        sync: false
+      - key: MP_TEST_PAYER_EMAIL
+        sync: false
+      - key: MP_WEBHOOK_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: BACKEND_PUBLIC_URL
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
