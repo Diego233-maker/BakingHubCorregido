@@ -56,6 +56,8 @@ export interface ConfigPagos {
 export interface TarjetaTokenizada {
   token: string;
   paymentMethodId?: string;
+  /** credit_card | debit_card | prepaid_card: la API de Orders de Mercado Pago lo exige. */
+  paymentTypeId?: string;
   issuerId?: string;
   cuotas: number;
 }

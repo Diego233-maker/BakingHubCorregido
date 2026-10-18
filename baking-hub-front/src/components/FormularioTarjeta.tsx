@@ -33,12 +33,12 @@ export default function FormularioTarjeta({ modo, valores, errores, deshabilitad
 
       numero.on('binChange', async ({ bin }) => {
         if (!bin) {
-          onChange({ ...valoresRef.current, paymentMethodId: undefined });
+          onChange({ ...valoresRef.current, paymentMethodId: undefined, paymentTypeId: undefined });
           return;
         }
         try {
           const { results } = await mp.getPaymentMethods({ bin });
-          onChange({ ...valoresRef.current, paymentMethodId: results?.[0]?.id });
+          onChange({ ...valoresRef.current, paymentMethodId: results?.[0]?.id, paymentTypeId: results?.[0]?.payment_type_id });
         } catch (error) {
           console.error('Error al detectar el método de pago:', error);
         }

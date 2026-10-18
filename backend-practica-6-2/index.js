@@ -217,6 +217,7 @@ type EventoPresenciaUsuario {
 input TarjetaInput {
   token: String!
   paymentMethodId: String
+  paymentTypeId: String
   issuerId: String
   cuotas: Int
 }
@@ -889,9 +890,9 @@ app.disable('x-powered-by');
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 /**
- * Webhook de Mercado Pago. Mercado Pago llama aquí cuando cambia el estado de un pago (por ejemplo,
- * cuando alguien paga en OXXO). Nunca confiamos en el cuerpo del aviso: solo tomamos el id del pago
- * y le preguntamos a Mercado Pago cuál es su estado real.
+ * Webhook de Mercado Pago. Mercado Pago llama aquí cuando cambia el estado de una order (por ejemplo,
+ * cuando alguien paga en OXXO). Nunca confiamos en el cuerpo del aviso: solo tomamos el id
+ * y le preguntamos a Mercado Pago cuál es su estado real (GET /v1/orders/{id}).
  * En desarrollo expón el puerto con ngrok/cloudflared y pon esa URL en BACKEND_PUBLIC_URL.
  */
 app.post('/webhooks/mercadopago', express.json({ limit: '100kb' }), async (req, res) => {
@@ -899,16 +900,17 @@ app.post('/webhooks/mercadopago', express.json({ limit: '100kb' }), async (req, 
     if (MODO === 'simulado') return res.sendStatus(200);
     if (!verificarFirmaWebhook(req)) return res.sendStatus(401);
 
+    // "order" = pagos con tarjeta/OXXO/SPEI (API de Orders, id ORD…) · "payment" = billetera (Checkout Pro).
     const tipo = req.body?.type ?? req.query.type ?? req.query.topic;
     const pagoId = idDeNotificacion(req); // el mismo id que se firmó
-    if (tipo !== 'payment' || !/^[\w-]{1,64}$/.test(pagoId)) return res.sendStatus(200);
+    if (!['order', 'payment'].includes(tipo) || !/^[\w-]{1,64}$/.test(pagoId)) return res.sendStatus(200);
 
     let pago;
     try {
       pago = await consultarPago(pagoId);
     } catch (error) {
       // El "simular notificación" del panel de Mercado Pago manda ids de prueba que no existen: no se reintentan.
-      if (error?.status === 404) {
+      if (error?.status === 404 || (tipo === 'order' && error?.status === 400)) {
         console.warn(`Webhook: el pago ${pagoId} no existe en Mercado Pago (¿notificación de prueba?)`);
         return res.sendStatus(200);
       }

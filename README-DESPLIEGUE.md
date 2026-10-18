@@ -27,16 +27,23 @@ Haz los pasos **en este orden**, porque cada URL se necesita en el paso siguient
 1. **New → Blueprint**, elige este repo. Render lee `render.yaml` y crea el servicio `baking-hub-backend`.
 2. Captura las variables marcadas `sync: false`:
    - `DATABASE_URL`: la del paso 1.
-   - `MP_ACCESS_TOKEN`: Access Token de **prueba** (`TEST-...`) de Mercado Pago.
-   - `MP_TEST_PAYER_EMAIL`: correo de la cuenta compradora de prueba (obligatorio con un token `TEST-`).
+   - `MP_ACCESS_TOKEN`: Access Token de **prueba** (Mercado Pago → tu aplicación → *Pruebas → Credenciales de prueba*). Hoy suele empezar con `APP_USR-`, igual que el de producción: lo que cuenta es de qué sección lo copiaste.
+   - `MP_TEST_PAYER_EMAIL`: **opcional**. Déjalo vacío al principio (se cobra con el correo del cliente). Define una cuenta compradora de *Cuentas de prueba* solo si Mercado Pago rechaza al comprador.
    - `ADMIN_EMAIL`: el correo con el que te registrarás como admin.
    - `FRONTEND_URL`, `BACKEND_PUBLIC_URL` y `MP_WEBHOOK_SECRET`: déjalas vacías por ahora y vuelve al paso 4
      (`pagos.js` exige `MP_WEBHOOK_SECRET` solo si `BACKEND_PUBLIC_URL` tiene valor).
 3. Cuando termine el deploy, abre `https://TU-SERVICIO.onrender.com/health`. Debe responder `{"ok":true}`.
 
 > `NODE_ENV=production` y `MP_MODO=real` son obligatorios en Render: `pagos.js` rechaza el modo simulado en
-> producción porque cualquiera podría marcar sus pedidos como pagados. Usa credenciales `TEST-` y no se hará
+> producción porque cualquiera podría marcar sus pedidos como pagados. Con credenciales de prueba no se hace
 > ningún cobro real.
+>
+> `MP_CREDENCIALES_PRUEBA=true` (ya viene en `render.yaml`) le indica al backend que las credenciales son de
+> prueba aunque empiecen con `APP_USR-`. Al pasar a producción, quita esa variable y usa las credenciales de
+> *Producción*.
+>
+> **Pagos:** tarjeta, OXXO y SPEI usan la **API de Orders** de Mercado Pago (`POST /v1/orders`); la billetera
+> sigue con Checkout Pro. Si algo falla, pon `MP_DEBUG=1` en Render para ver la respuesta completa en los Logs.
 >
 > Mantén **una sola instancia**: la presencia de clientes y las suscripciones viven en la memoria del proceso.
 
@@ -50,7 +57,7 @@ Haz los pasos **en este orden**, porque cada URL se necesita en el paso siguient
    | `GRAPHQL_URL` | `https://TU-SERVICIO.onrender.com/` (con la `/` final) |
    | `GRAPHQL_WS_URL` | `wss://TU-SERVICIO.onrender.com/subscriptions` |
    | `SSE_MAX_MS` | `9000` |
-   | `PUBLIC_MP_PUBLIC_KEY` | Public Key `TEST-...` de la **misma** aplicación de Mercado Pago |
+   | `PUBLIC_MP_PUBLIC_KEY` | Public Key de **Credenciales de prueba**, de la misma aplicación que el Access Token |
 
    `PUBLIC_MP_PUBLIC_KEY` se incrusta al compilar: si la cambias, hay que volver a desplegar.
 3. Despliega y anota la URL de Netlify.
@@ -59,9 +66,17 @@ Haz los pasos **en este orden**, porque cada URL se necesita en el paso siguient
 
 1. En Render pon `FRONTEND_URL` = URL de Netlify (con `https://`, sin `/` final) y
    `BACKEND_PUBLIC_URL` = URL de Render.
-2. En Mercado Pago → Webhooks, configura `https://TU-SERVICIO.onrender.com/webhooks/mercadopago`,
-   copia su clave secreta en `MP_WEBHOOK_SECRET` (Render) y guarda: Render redespliega solo.
+2. En Mercado Pago → tu aplicación → **Webhooks**, configura (modo de prueba) la URL
+   `https://TU-SERVICIO.onrender.com/webhooks/mercadopago` y suscribe el evento **Order (Mercado Pago)**
+   (el de *Pagos* solo sirve para la billetera). Copia la clave secreta en `MP_WEBHOOK_SECRET` (Render) y guarda:
+   Render redespliega solo.
 3. Regístrate en el sitio con el correo de `ADMIN_EMAIL`: ese usuario obtiene rol `admin`.
+
+## Probar un pago con tarjeta
+
+Usa las tarjetas de la sección **Pruebas → Tarjetas de prueba** del panel de Mercado Pago. Con las credenciales de prueba,
+el **nombre del titular** decide el resultado: `APRO` aprueba el pago. Si queda aprobado, el pedido pasa a *pagado* al
+instante; con OXXO o SPEI queda *pendiente* y se confirma por el webhook (o por la conciliación cada 5 min).
 
 ## Limitaciones a tener en cuenta
 
@@ -75,9 +90,10 @@ Haz los pasos **en este orden**, porque cada URL se necesita en el paso siguient
   las llamadas a los 8 s (`src/lib/graphql.ts`), así que la primera visita tras la pausa puede mostrar
   "No pudimos validar tu sesión" o "No se pudo conectar con el servidor". Para una demo, haz un ping a `/health`
   cada 10 min (por ejemplo con UptimeRobot) o usa un plan de pago.
+- Si el banco pide autenticación 3D Secure (`action_required` / `pending_challenge`), el pedido queda pendiente: esa verificación no está implementada.
 - Dormido, tampoco corre el mantenimiento que concilia pagos pendientes y libera stock cada 5 minutos.
 - Supabase gratis pausa proyectos sin actividad durante una semana.
-- Si ves `Unauthorized use of live credentials`, estás mezclando credenciales `TEST-` con `APP_USR-`.
+- Si ves `Unauthorized use of live credentials`, estás mezclando credenciales de prueba con las de producción: copia la Public Key y el Access Token de la **misma** sección (*Credenciales de prueba*), sin fijarte en el prefijo.
 
 ## Desarrollo local
 

@@ -13,6 +13,9 @@ import { MercadoPagoConfig, Payment, Preference } from 'mercadopago';
  *   buscarPagosDePedido()        -> busca los pagos de un pedido por external_reference (billetera)
  *   verificarFirmaWebhook()      -> valida la cabecera x-signature de los avisos
  *
+ * Tarjeta, OXXO y SPEI usan la API de ORDERS de Mercado Pago (POST /v1/orders), igual que el proyecto de
+ * referencia que sí cobra. La billetera de Mercado Pago sigue con Checkout Pro (Preferences).
+ *
  * La integración YA está hecha: para usarla basta con llenar el .env (ver .env.example) y poner
  * MP_MODO=real. Mientras MP_MODO=simulado (valor por defecto) NO se llama a Mercado Pago: los pagos se
  * simulan para poder probar todas las pantallas. El modo simulado se rechaza con NODE_ENV=production.
@@ -35,6 +38,10 @@ const FRONTEND_URL = (process.env.FRONTEND_URL ?? 'http://localhost:4321').repla
 const BACKEND_PUBLIC_URL = (process.env.BACKEND_PUBLIC_URL ?? '').replace(/\/$/, '');
 const MP_ACCESS_TOKEN = process.env.MP_ACCESS_TOKEN ?? '';
 const MP_TEST_PAYER_EMAIL = process.env.MP_TEST_PAYER_EMAIL?.trim() ?? '';
+// URL base de la API de Mercado Pago. Solo se cambia en pruebas automáticas (servidor falso).
+const MP_API_URL = (process.env.MP_API_URL ?? 'https://api.mercadopago.com').replace(/\/$/, '');
+/** Correo del comprador. En pruebas, MP_TEST_PAYER_EMAIL es opcional: si no se define se usa el del cliente. */
+const emailDelPagador = (usuario) => (MP_CREDENCIALES_PRUEBA && MP_TEST_PAYER_EMAIL ? MP_TEST_PAYER_EMAIL : usuario.email);
 // ¿Son credenciales de PRUEBA? Mercado Pago ya no las distingue por el prefijo: las de prueba pueden empezar con
 // TEST- o con APP_USR-. Si las copiaste de "Pruebas → Credenciales de prueba" y empiezan con APP_USR-,
 // pon MP_CREDENCIALES_PRUEBA=true.
@@ -54,11 +61,12 @@ if (MODO === 'real') {
     process.exit(1);
   }
   if (MP_CREDENCIALES_PRUEBA && !MP_TEST_PAYER_EMAIL) {
-    console.error('❌ Estás usando credenciales de prueba, pero falta MP_TEST_PAYER_EMAIL');
-    console.error('   Configura el correo de una cuenta compradora de prueba creada para esta integración.');
-    process.exit(1);
+    console.warn(
+      'ℹ️  Credenciales de prueba sin MP_TEST_PAYER_EMAIL: se cobrará con el correo del cliente. Si Mercado Pago lo rechaza\n' +
+        '   (por ejemplo, si es el mismo correo de tu cuenta vendedora), define MP_TEST_PAYER_EMAIL con una cuenta compradora de prueba.'
+    );
   }
-  console.log(MP_CREDENCIALES_PRUEBA ? '🧪 Mercado Pago: credenciales de PRUEBA (el comprador será MP_TEST_PAYER_EMAIL).' : '💳 Mercado Pago: credenciales de PRODUCCIÓN (cobros reales).');
+  console.log(MP_CREDENCIALES_PRUEBA ? '🧪 Mercado Pago: credenciales de PRUEBA.' : '💳 Mercado Pago: credenciales de PRODUCCIÓN (cobros reales).');
   if (BACKEND_PUBLIC_URL && !process.env.MP_WEBHOOK_SECRET) {
     // Sin la clave secreta el webhook rechaza todos los avisos (401) y Mercado Pago los reintenta durante días.
     console.error('❌ Hay BACKEND_PUBLIC_URL pero falta MP_WEBHOOK_SECRET (Tus integraciones → Webhooks → clave secreta).');
@@ -111,7 +119,7 @@ export async function crearCobro({ pedido, usuario, metodo, tarjeta }) {
   return crearCobroMercadoPago({ pedido, usuario, metodo, tarjeta });
 }
 
-/** Consulta el estado real de un pago en Mercado Pago. Devuelve { pagoId, estado, pedidoId, monto, moneda }. */
+/** Consulta el estado real de una order (ORD…) o de un pago de la billetera. Devuelve { pagoId, estado, pedidoId, monto, moneda }. */
 export async function consultarPago(pagoId) {
   if (MODO === 'simulado') throw new Error('consultarPago no se usa en modo simulado');
   return consultarPagoMercadoPago(pagoId);
@@ -151,6 +159,29 @@ export function estadoDesdeMercadoPago(status, statusDetail) {
   }
 }
 
+/**
+ * Traduce el estado de una ORDER de Mercado Pago (API de Orders) al vocabulario de Baking Hub.
+ * status: processed (pagada) · created / action_required (esperando pago en OXXO/SPEI) · failed (rechazada)
+ *         canceled · expired · refunded
+ */
+export function estadoDesdeOrden(status) {
+  switch (String(status ?? '').toLowerCase()) {
+    case 'processed':
+      return 'pagado';
+    case 'failed':
+      return 'rechazado';
+    case 'canceled':
+    case 'cancelled':
+      return 'cancelado';
+    case 'expired':
+      return 'expirado';
+    case 'refunded':
+      return 'reembolsado';
+    default: // created, action_required, at_buyer, processing…
+      return 'pendiente';
+  }
+}
+
 /* ------------------------------------------------------------------------------------------------
  * MODO SIMULADO (no llama a Mercado Pago)
  * -----------------------------------------------------------------------------------------------*/
@@ -180,7 +211,7 @@ function crearCobroSimulado({ metodo, tarjeta }) {
  * -----------------------------------------------------------------------------------------------*/
 
 /**
- * Crea el cobro en Mercado Pago (Payments API para tarjeta/OXXO/SPEI, Preferences para la billetera).
+ * Crea el cobro en Mercado Pago (API de Orders para tarjeta/OXXO/SPEI, Preferences para la billetera).
  *
  * Datos que recibe:
  *   pedido  -> { id, total }            (total en pesos; usa Number(pedido.total))
@@ -188,29 +219,28 @@ function crearCobroSimulado({ metodo, tarjeta }) {
  *   metodo  -> 'tarjeta' | 'oxxo' | 'spei' | 'mercadopago'
  *   tarjeta -> { token, paymentMethodId, issuerId, cuotas }   (solo en 'tarjeta'; el token lo genera el navegador)
  *
- * Qué mandar a Mercado Pago según el método (Payments API, new Payment(mp).create({ body, requestOptions })):
+ * Qué se manda a Mercado Pago (API de Orders, POST /v1/orders):
  *
- *   tarjeta:  { transaction_amount, token: tarjeta.token, installments: tarjeta.cuotas ?? 1,
- *               payment_method_id: tarjeta.paymentMethodId, issuer_id: tarjeta.issuerId,
- *               payer: { email: usuario.email }, ... }
- *   oxxo:     { transaction_amount, payment_method_id: 'oxxo', date_of_expiration: <ISO con zona horaria>,
- *               payer: { email, first_name, last_name }, ... }
- *   spei:     { transaction_amount, payment_method_id: 'clabe', date_of_expiration: ..., payer: {...}, ... }
+ *   { type: 'online', processing_mode: 'automatic', total_amount: '123.00', external_reference: String(pedido.id),
+ *     payer: { email, first_name, last_name },
+ *     transactions: { payments: [{ amount: '123.00', payment_method }] },
+ *     expiration_time: 'P3D' }            <- solo OXXO / SPEI
  *
- *   En todos incluye:  description, external_reference: String(pedido.id)  <- así el webhook sabe a qué pedido pertenece
- *                      notification_url: `${BACKEND_PUBLIC_URL}/webhooks/mercadopago`
- *                      y en requestOptions un idempotencyKey (p. ej. `pedido-${pedido.id}`).
+ *   payment_method según el método:
+ *     tarjeta: { id: 'visa', type: 'credit_card' | 'debit_card', token, installments }
+ *     oxxo:    { id: 'oxxo',  type: 'ticket' }
+ *     spei:    { id: 'clabe', type: 'bank_transfer' }
  *
  *   mercadopago (billetera / Checkout Pro): new Preference(mp).create({ body: { items, payer, external_reference,
  *               notification_url, back_urls: { success/pending/failure: `${FRONTEND_URL}/pedidos/${pedido.id}` },
  *               auto_return: 'approved' } })  -> redirige al cliente a `init_point`.
  *
  * Qué devolver (ver ResultadoCobro arriba):
- *   estado      <- estadoDesdeMercadoPago(pago.status, pago.status_detail)   ('approved' => 'pagado', etc.)
- *   pagoId      <- String(pago.id)
- *   referencia  <- OXXO: pago.transaction_details.payment_method_reference_id  ·  SPEI: la CLABE que devuelva el pago
- *   expira      <- new Date(pago.date_of_expiration)
- *   url         <- OXXO/SPEI: pago.transaction_details.external_resource_url  ·  mercadopago: preference.init_point
+ *   estado      <- estadoDesdeOrden(orden.status)   ('processed' => 'pagado', 'failed' => 'rechazado', etc.)
+ *   pagoId      <- orden.id  (empieza con "ORD"; es lo que llega en el webhook)
+ *   referencia  <- orden.transactions.payments[0].payment_method.reference  (OXXO: referencia · SPEI: CLABE)
+ *   expira      <- orden.transactions.payments[0].date_of_expiration
+ *   url         <- OXXO/SPEI: payment_method.ticket_url  ·  mercadopago: preference.init_point
  *
  * Si Mercado Pago responde con error, lanza una excepción: index.js cancela el pedido y libera el stock.
  */
@@ -242,47 +272,120 @@ async function crearCobroMercadoPago({ pedido, usuario, metodo, tarjeta }) {
     return { estado: 'pendiente', pagoId: null, referencia: null, expira, url: pref.init_point };
   }
 
-  // Tarjeta, OXXO y SPEI: Payments API
+  // Tarjeta, OXXO y SPEI: API de Orders (POST /v1/orders).
+  const total = monto.toFixed(2); // Orders pide los montos como texto con 2 decimales
   const body = {
-    transaction_amount: monto,
+    type: 'online',
+    processing_mode: 'automatic',
+    total_amount: total,
     description: `Pedido #${pedido.id} - Baking Hub`,
     external_reference: String(pedido.id), // así el webhook sabe a qué pedido pertenece
-    notification_url,
-    // Mercado Pago solo admite el correo del comprador de prueba al usar credenciales de prueba.
     payer: {
-      email: MP_CREDENCIALES_PRUEBA ? MP_TEST_PAYER_EMAIL : usuario.email,
+      email: emailDelPagador(usuario),
       first_name: nombre,
       last_name: resto.join(' ') || nombre,
     },
+    transactions: { payments: [{ amount: total, payment_method: metodoDePagoOrden(metodo, tarjeta) }] },
   };
+  // Las fichas de OXXO y SPEI vencen; la tarjeta se cobra al momento.
+  if (metodo !== 'tarjeta') body.expiration_time = duracionISO(HORAS_PARA_PAGAR);
 
-  if (metodo === 'tarjeta') {
-    Object.assign(body, {
-      token: tarjeta.token,
-      installments: tarjeta.cuotas ?? 1,
-      payment_method_id: tarjeta.paymentMethodId,
-      issuer_id: tarjeta.issuerId ? Number(tarjeta.issuerId) : undefined,
-    });
-  } else {
-    const limite = new Date(Date.now() + HORAS_PARA_PAGAR * 3600_000);
-    Object.assign(body, {
-      payment_method_id: metodo === 'oxxo' ? 'oxxo' : 'clabe',
-      date_of_expiration: fechaMP(limite),
-    });
+  const orden = await llamarOrders({ metodo, method: 'POST', path: '/v1/orders', body, idempotencyKey: requestOptions.idempotencyKey });
+  if (process.env.MP_DEBUG === '1') console.log('MP_DEBUG respuesta de la order:', JSON.stringify(orden, null, 2));
+  return resultadoDeOrden(orden, metodo);
+}
+
+/** Duración ISO 8601 para expiration_time: 72 h => "P3D". */
+function duracionISO(horas) {
+  return horas % 24 === 0 ? `P${horas / 24}D` : `PT${horas}H`;
+}
+
+/** payment_method de la order según el método elegido. */
+function metodoDePagoOrden(metodo, tarjeta) {
+  switch (metodo) {
+    case 'tarjeta': {
+      const tipos = ['credit_card', 'debit_card', 'prepaid_card'];
+      return {
+        id: tarjeta.paymentMethodId,
+        type: tipos.includes(tarjeta.paymentTypeId) ? tarjeta.paymentTypeId : 'credit_card',
+        token: tarjeta.token,
+        installments: tarjeta.cuotas ?? 1,
+      };
+    }
+    case 'spei':
+      return { id: 'clabe', type: 'bank_transfer' };
+    case 'oxxo':
+      return { id: 'oxxo', type: 'ticket' };
+    default:
+      throw new Error(`Método de pago desconocido: ${metodo}`);
   }
+}
 
-  const pago = await llamarMP(() => new Payment(mp).create({ body, requestOptions }), { metodo, body, requestOptions });
-  // console.log(JSON.stringify(pago, null, 2)); // descomenta la primera vez para ver la respuesta completa
-
-  const estado = estadoDesdeMercadoPago(pago.status, pago.status_detail);
-  const td = pago.transaction_details ?? {};
+/** Convierte la order de Mercado Pago en el ResultadoCobro que usa index.js. */
+function resultadoDeOrden(orden, metodo) {
+  const pago = orden?.transactions?.payments?.[0] ?? {};
+  const pm = pago.payment_method ?? {};
+  const estado = estadoDesdeOrden(orden?.status);
+  const venceHoras = metodo === 'tarjeta' ? null : HORAS_PARA_PAGAR;
   return {
     estado: estado === 'pagado' || estado === 'pendiente' ? estado : 'rechazado',
-    pagoId: String(pago.id),
-    referencia: td.payment_method_reference_id ?? null,
-    expira: pago.date_of_expiration ? new Date(pago.date_of_expiration) : null,
-    url: td.external_resource_url ?? null,
+    pagoId: orden?.id ? String(orden.id) : null,
+    referencia: pm.reference ?? null,
+    expira: pago.date_of_expiration
+      ? new Date(pago.date_of_expiration)
+      : venceHoras
+        ? new Date(Date.now() + venceHoras * 3600_000)
+        : null,
+    url: pm.ticket_url ?? null,
   };
+}
+
+/**
+ * Llamada HTTP a la API de Orders. Un 402 (pago rechazado) NO es un error del sistema: Mercado Pago devuelve la
+ * order con el motivo y aquí se convierte en una order "failed". Cualquier otro fallo lanza una excepción con
+ * error.status, para que index.js cancele el pedido y libere el stock.
+ */
+async function llamarOrders({ metodo, method, path, body, idempotencyKey }) {
+  const res = await fetch(MP_API_URL + path, {
+    method,
+    headers: {
+      Authorization: `Bearer ${MP_ACCESS_TOKEN}`,
+      Accept: 'application/json',
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+      ...(idempotencyKey ? { 'X-Idempotency-Key': idempotencyKey } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(15_000),
+  });
+  const texto = await res.text();
+  let json = null;
+  try {
+    json = texto ? JSON.parse(texto) : null;
+  } catch {
+    json = null;
+  }
+  if (res.ok) return json;
+
+  if (res.status === 402 && json) {
+    const orden = json.data && typeof json.data === 'object' ? json.data : json;
+    let detalle = orden.status_detail ?? orden.transactions?.payments?.[0]?.status_detail ?? null;
+    if ((!detalle || detalle === 'failed') && Array.isArray(json.errors) && json.errors[0]?.code) detalle = json.errors[0].code;
+    console.warn(`Mercado Pago rechazó el pago (402): ${detalle ?? 'sin detalle'}`);
+    return { ...orden, status: 'failed', status_detail: detalle };
+  }
+
+  const causas = Array.isArray(json?.errors) ? json.errors : [];
+  console.error(`❌ Error de Mercado Pago (status ${res.status}) en ${method} ${path}:`, texto.slice(0, 800));
+  if (body) {
+    console.error('   Método:', metodo ?? '?');
+    console.error('   Body enviado:', JSON.stringify(body, (k, v) => (k === 'token' ? '***' : v), 2));
+    console.error('   Idempotency key:', idempotencyKey ?? '-');
+  }
+  const error = new Error(`Mercado Pago rechazó la solicitud (${res.status})`);
+  error.status = res.status;
+  error.cause = causas;
+  error.error = json;
+  throw error;
 }
 
 /**
@@ -337,7 +440,24 @@ function resumenPago(pago) {
   };
 }
 
+/** Reduce una order de Mercado Pago a los datos que usa Baking Hub. */
+function resumenOrden(orden) {
+  const pedidoId = Number(orden?.external_reference);
+  return {
+    pagoId: String(orden?.id ?? ''),
+    estado: estadoDesdeOrden(orden?.status),
+    pedidoId: Number.isInteger(pedidoId) && pedidoId > 0 ? pedidoId : null,
+    monto: Number(orden?.total_amount),
+    moneda: null, // la order es siempre en la moneda de la cuenta (MXN); no viene como campo
+  };
+}
+
 async function consultarPagoMercadoPago(pagoId) {
+  // Los ids de la API de Orders empiezan con "ORD"; los de la billetera (Checkout Pro) son numéricos.
+  if (/^ORD/i.test(String(pagoId))) {
+    const orden = await llamarOrders({ method: 'GET', path: `/v1/orders/${encodeURIComponent(pagoId)}` });
+    return resumenOrden(orden);
+  }
   return resumenPago(await new Payment(mp).get({ id: pagoId }));
 }
 

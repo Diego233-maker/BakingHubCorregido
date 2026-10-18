@@ -6,6 +6,7 @@ export interface DatosTarjeta {
   vencimiento: string;
   cvv: string;
   paymentMethodId?: string;
+  paymentTypeId?: string;
 }
 
 interface CampoSeguro {
@@ -24,7 +25,7 @@ interface CamposMercadoPago {
 
 export interface MercadoPagoInstance {
   fields: CamposMercadoPago;
-  getPaymentMethods(datos: { bin: string }): Promise<{ results?: Array<{ id: string }> }>;
+  getPaymentMethods(datos: { bin: string }): Promise<{ results?: Array<{ id: string; payment_type_id?: string }> }>;
 }
 
 declare global {
@@ -52,7 +53,7 @@ export async function tokenizarTarjeta(
   datos: DatosTarjeta,
   modo: ConfigPagos['modo'],
 ): Promise<TarjetaTokenizada> {
-  if (modo === 'simulado') return { token: 'sim_4242', paymentMethodId: 'visa', cuotas: 1 };
+  if (modo === 'simulado') return { token: 'sim_4242', paymentMethodId: 'visa', paymentTypeId: 'credit_card', cuotas: 1 };
   if (!datos.paymentMethodId) {
     throw new Error('No pudimos identificar tu tarjeta. Revisa el número e inténtalo de nuevo.');
   }
@@ -60,7 +61,7 @@ export async function tokenizarTarjeta(
   try {
     const resultado = await obtenerMercadoPago().fields.createCardToken({ cardholderName: datos.titular.trim() });
     if (!resultado.id) throw new Error('No se recibió un token de Mercado Pago.');
-    return { token: resultado.id, paymentMethodId: datos.paymentMethodId, cuotas: 1 };
+    return { token: resultado.id, paymentMethodId: datos.paymentMethodId, paymentTypeId: datos.paymentTypeId, cuotas: 1 };
   } catch (error) {
     if (error instanceof Error && error.message === 'No se recibió un token de Mercado Pago.') throw error;
     const errores = Array.isArray(error) ? error : [error];
