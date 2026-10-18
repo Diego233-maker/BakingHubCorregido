@@ -299,6 +299,9 @@ async function crearCobroMercadoPago({ pedido, usuario, metodo, tarjeta }) {
 export function explicarRechazo(motivo) {
   const m = String(motivo ?? '').toLowerCase();
   const pista = MP_CREDENCIALES_PRUEBA ? ' (Modo de prueba: usa una tarjeta de prueba de Mercado Pago y escribe APRO como titular.)' : '';
+  if (m.includes('card_token')) {
+    return 'No pudimos validar tu tarjeta. Vuelve a escribir los datos e inténtalo de nuevo.' + (MP_CREDENCIALES_PRUEBA ? ' (Si se repite: la clave pública del frontend y el Access Token del backend deben ser de la misma aplicación y del mismo entorno.)' : '');
+  }
   if (m.includes('insufficient')) return 'Tu tarjeta no tiene fondos suficientes. Prueba con otra tarjeta u otro método de pago.' + pista;
   if (m.includes('security_code') || m.includes('cvv')) return 'El código de seguridad (CVV) no es correcto. Revísalo e inténtalo de nuevo.';
   if (m.includes('card_number')) return 'El número de la tarjeta no es válido. Revísalo e inténtalo de nuevo.';
@@ -394,6 +397,14 @@ async function llamarOrders({ metodo, method, path, body, idempotencyKey }) {
     ].filter((x) => typeof x === 'string' && x && x !== 'failed');
     const detalle = candidatos[0] ?? 'failed';
     console.warn(`Mercado Pago rechazó el pago (402): ${detalle}`);
+    if (String(detalle).includes('card_token')) {
+      console.warn(
+        '   💡 invalid_card_token: el token de la tarjeta no es válido para este Access Token. Causas habituales:\n' +
+          '      1) PUBLIC_MP_PUBLIC_KEY (Netlify) y MP_ACCESS_TOKEN (Render) son de aplicaciones o entornos distintos (prueba vs producción).\n' +
+          '      2) El frontend publicado se compiló con otra clave pública: tras cambiarla hay que volver a desplegar Netlify.\n' +
+          '      3) El token ya se usó o venció (cada token sirve una sola vez).'
+      );
+    }
     console.warn('   Respuesta completa de Mercado Pago:', JSON.stringify(json, (k, v) => (k === 'token' ? '***' : v)).slice(0, 1500));
     return { ...orden, status: 'failed', status_detail: detalle };
   }
