@@ -177,9 +177,13 @@ Las mejoras, correcciones y sugerencias son bienvenidas. Para proponer cambios, 
 
 No se especifica una licencia en este README. Antes de reutilizar o distribuir el código, revisa si el repositorio incluye un archivo `LICENSE` y cuáles son sus condiciones.
 
-## 👨‍💻 Autor
+## 👥 Autores y colaboradores
 
-Desarrollado por [GJacquesF](https://github.com/GJacquesF).
+Gracias a las personas que participaron en el desarrollo de BakingHub:
+
+- [Diego233-maker](https://github.com/Diego233-maker)
+- [GJacquesF](https://github.com/GJacquesF)
+- [zilv4008](https://github.com/zilv4008)
 
 ---
 
