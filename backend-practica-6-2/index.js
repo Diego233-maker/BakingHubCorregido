@@ -26,6 +26,7 @@ import {
   buscarPagosDePedido,
   consultarPago,
   crearCobro,
+  explicarRechazo,
   idDeNotificacion,
   verificarFirmaWebhook,
 } from './pagos.js';
@@ -712,7 +713,7 @@ const resolvers = {
       }
       if (cobro.estado === 'rechazado') {
         await cancelarPedido(pedido.id, 'cancelado');
-        throw errorDeUsuario('Tu pago fue rechazado. Revisa los datos o prueba con otro método de pago.');
+        throw errorDeUsuario(explicarRechazo(cobro.motivo));
       }
 
       // 3) Guardar el resultado del cobro (referencia de OXXO/SPEI, fecha límite, id del pago, etc.).
