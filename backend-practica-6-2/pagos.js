@@ -295,6 +295,22 @@ async function crearCobroMercadoPago({ pedido, usuario, metodo, tarjeta }) {
   return resultadoDeOrden(orden, metodo);
 }
 
+/** Traduce el motivo de rechazo de Mercado Pago (status_detail) a un mensaje para el cliente. */
+export function explicarRechazo(motivo) {
+  const m = String(motivo ?? '').toLowerCase();
+  const pista = MP_CREDENCIALES_PRUEBA ? ' (Modo de prueba: usa una tarjeta de prueba de Mercado Pago y escribe APRO como titular.)' : '';
+  if (m.includes('insufficient')) return 'Tu tarjeta no tiene fondos suficientes. Prueba con otra tarjeta u otro método de pago.' + pista;
+  if (m.includes('security_code') || m.includes('cvv')) return 'El código de seguridad (CVV) no es correcto. Revísalo e inténtalo de nuevo.';
+  if (m.includes('card_number')) return 'El número de la tarjeta no es válido. Revísalo e inténtalo de nuevo.';
+  if (m.includes('date') || m.includes('expir')) return 'La fecha de vencimiento no es correcta. Revísala e inténtalo de nuevo.';
+  if (m.includes('call_for_authorize')) return 'Tu banco necesita que autorices este pago. Llámalos o prueba con otra tarjeta.';
+  if (m.includes('blacklist') || m.includes('high_risk') || m.includes('fraud')) return 'No pudimos aprobar este pago por seguridad. Prueba con otro método de pago.';
+  if (m.includes('max_attempts')) return 'Superaste los intentos permitidos con esta tarjeta. Prueba con otra tarjeta u otro método.';
+  if (m.includes('duplicated')) return 'Ya enviaste un pago igual hace unos instantes. Espera unos minutos antes de reintentar.';
+  if (m.includes('bad_filled') || m.includes('invalid')) return 'Algún dato de la tarjeta no es correcto. Revísalos e inténtalo de nuevo.';
+  return 'El banco rechazó el pago. Revisa los datos o prueba con otra tarjeta u otro método de pago.' + pista;
+}
+
 /** Duración ISO 8601 para expiration_time: 72 h => "P3D". */
 function duracionISO(horas) {
   return horas % 24 === 0 ? `P${horas / 24}D` : `PT${horas}H`;
@@ -329,6 +345,7 @@ function resultadoDeOrden(orden, metodo) {
   const venceHoras = metodo === 'tarjeta' ? null : HORAS_PARA_PAGAR;
   return {
     estado: estado === 'pagado' || estado === 'pendiente' ? estado : 'rechazado',
+    motivo: estado === 'rechazado' ? (orden?.status_detail ?? null) : null,
     pagoId: orden?.id ? String(orden.id) : null,
     referencia: pm.reference ?? null,
     expira: pago.date_of_expiration
@@ -368,9 +385,16 @@ async function llamarOrders({ metodo, method, path, body, idempotencyKey }) {
 
   if (res.status === 402 && json) {
     const orden = json.data && typeof json.data === 'object' ? json.data : json;
-    let detalle = orden.status_detail ?? orden.transactions?.payments?.[0]?.status_detail ?? null;
-    if ((!detalle || detalle === 'failed') && Array.isArray(json.errors) && json.errors[0]?.code) detalle = json.errors[0].code;
-    console.warn(`Mercado Pago rechazó el pago (402): ${detalle ?? 'sin detalle'}`);
+    // La order solo dice "failed"; el motivo real viene en el pago (transactions.payments[0].status_detail) o en errors[].
+    const candidatos = [
+      orden.transactions?.payments?.[0]?.status_detail,
+      json.errors?.[0]?.code,
+      json.errors?.[0]?.message,
+      orden.status_detail,
+    ].filter((x) => typeof x === 'string' && x && x !== 'failed');
+    const detalle = candidatos[0] ?? 'failed';
+    console.warn(`Mercado Pago rechazó el pago (402): ${detalle}`);
+    console.warn('   Respuesta completa de Mercado Pago:', JSON.stringify(json, (k, v) => (k === 'token' ? '***' : v)).slice(0, 1500));
     return { ...orden, status: 'failed', status_detail: detalle };
   }
 
