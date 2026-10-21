@@ -108,13 +108,15 @@ try {
   .tabla-pedidos { min-width: 820px; }
   .pedido-productos-admin { margin: 0; padding-left: 1.1rem; min-width: 150px; }
   .pedido-productos-admin li + li { margin-top: 0.2rem; }
-  .pedido-cliente { display: flex; align-items: flex-start; gap: 0.55rem; min-width: 150px; }
-  .pedido-cliente [data-customer-details] { min-width: 0; }
+  .pedido-cliente { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.55rem; width: 100%; min-width: 150px; }
+  .pedido-cliente [data-customer-details] { order: 0; min-width: 0; }
   .pedido-cliente small { display: block; overflow-wrap: anywhere; }
   .pedido-ojo {
     display: inline-grid;
     place-items: center;
+    order: 1;
     flex: 0 0 2.25rem;
+    margin-left: auto;
     width: 2.25rem;
     height: 2.25rem;
     padding: 0;
