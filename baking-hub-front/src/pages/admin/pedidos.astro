@@ -23,7 +23,7 @@ try {
 
 <AdminLayout titulo="Pedidos" seccion="pedidos">
   <h2 class="admin-titulo">Pedidos</h2>
-  <p class="admin-subtitulo">Consulta quién realizó cada pedido y actualiza su estado de preparación.</p>
+  <p class="admin-subtitulo">Revisa qué pidió cada cliente y cuándo se registró. Los datos personales están ocultos inicialmente.</p>
 
   {aviso && <p class="mensaje-exito" role="status">{aviso}</p>}
   {error && <Alert>{error}</Alert>}
@@ -35,14 +35,14 @@ try {
       <table class="tabla-admin tabla-pedidos">
         <thead>
           <tr>
-            <th>Pedido</th>
-            <th>Cliente</th>
-            <th>Fecha</th>
-            <th>Productos</th>
-            <th class="num">Total</th>
-            <th>Pago</th>
-            <th>Preparación</th>
-            <th>Acción</th>
+            <th scope="col">Pedido</th>
+            <th scope="col">Cliente</th>
+            <th scope="col">Cuándo</th>
+            <th scope="col">Qué pidió</th>
+            <th scope="col" class="num">Total</th>
+            <th scope="col">Pago</th>
+            <th scope="col">Preparación</th>
+            <th scope="col">Acción</th>
           </tr>
         </thead>
         <tbody>
@@ -50,26 +50,47 @@ try {
             const pago = estadoPedido(pedido.status);
             return (
               <tr>
-                <td><strong>#{pedido.id}</strong></td>
-                <td>
-                  <strong>{pedido.clienteNombre}</strong>
-                  <br />
-                  <small>{pedido.clienteEmail}</small>
+                <td data-label="Pedido"><strong>#{pedido.id}</strong></td>
+                <td data-label="Cliente">
+                  <div class="pedido-cliente">
+                    <button
+                      class="pedido-ojo"
+                      type="button"
+                      data-customer-toggle
+                      aria-label="Mostrar datos del cliente"
+                      aria-expanded="false"
+                      title="Mostrar datos del cliente"
+                    >
+                      <svg data-eye-open viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+                        <circle cx="12" cy="12" r="3" />
+                      </svg>
+                      <svg data-eye-closed class="icono-oculto" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m3 3 18 18M10.6 10.6a2 2 0 0 0 2.8 2.8" />
+                        <path d="M9.9 5.2A10.7 10.7 0 0 1 12 5c6.4 0 10 7 10 7a15.8 15.8 0 0 1-4.1 4.8M6.2 6.2C3.5 8 2 12 2 12s3.6 7 10 7c1.3 0 2.5-.3 3.5-.7" />
+                      </svg>
+                      <span class="solo-lector">Mostrar datos del cliente</span>
+                    </button>
+                    <div data-customer-details hidden>
+                      <strong>{pedido.clienteNombre}</strong>
+                      <small>{pedido.clienteEmail}</small>
+                    </div>
+                  </div>
                 </td>
-                <td>{formatearFecha(pedido.fecha)}</td>
-                <td>
+                <td data-label="Cuándo">{formatearFecha(pedido.fecha)}</td>
+                <td data-label="Qué pidió">
                   <ul class="pedido-productos-admin">
                     {pedido.productos.map((producto) => (
                       <li>{producto.cantidad} × {producto.nombre}</li>
                     ))}
                   </ul>
                 </td>
-                <td class="num">{precio(pedido.total)}</td>
-                <td><span class={`badge badge-${pago.clase}`}>{pago.etiqueta}</span></td>
-                <td>
+                <td data-label="Total" class="num">{precio(pedido.total)}</td>
+                <td data-label="Pago"><span class={`badge badge-${pago.clase}`}>{pago.etiqueta}</span></td>
+                <td data-label="Preparación">
                   <span class="badge badge-warn" data-order-state>No completado</span>
                 </td>
-                <td>
+                <td data-label="Acción">
                   <button class="btn-admin" type="button" data-order-toggle data-order-id={pedido.id} aria-pressed="false">
                     Marcar completado
                   </button>
@@ -84,9 +105,54 @@ try {
 </AdminLayout>
 
 <style>
-  .tabla-pedidos { min-width: 920px; }
+  .tabla-pedidos { min-width: 820px; }
   .pedido-productos-admin { margin: 0; padding-left: 1.1rem; min-width: 150px; }
-  .pedido-accion { margin: 0; }
+  .pedido-productos-admin li + li { margin-top: 0.2rem; }
+  .pedido-cliente { display: flex; align-items: flex-start; gap: 0.55rem; min-width: 150px; }
+  .pedido-cliente [data-customer-details] { min-width: 0; }
+  .pedido-cliente small { display: block; overflow-wrap: anywhere; }
+  .pedido-ojo {
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 2.25rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0;
+    color: var(--espresso);
+    background: var(--cream);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .pedido-ojo:hover { background: var(--honey); }
+  .pedido-ojo:focus-visible { outline: 2px solid var(--honey-dark); outline-offset: 2px; }
+  .pedido-ojo svg { width: 1.2rem; height: 1.2rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .solo-lector { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .pedido-cliente [hidden], .pedido-ojo .icono-oculto { display: none; }
+
+  @media (max-width: 760px) {
+    .tabla-wrap { overflow: visible; background: transparent; border: 0; }
+    .tabla-pedidos { display: block; min-width: 0; }
+    .tabla-pedidos thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+    .tabla-pedidos tbody { display: grid; gap: 0.75rem; }
+    .tabla-pedidos tr {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .tabla-pedidos td { min-width: 0; padding: 0.75rem; border-top: 0; overflow-wrap: anywhere; }
+    .tabla-pedidos td::before { content: attr(data-label); display: block; margin-bottom: 0.3rem; color: var(--espresso-soft); font-size: 0.75rem; font-weight: 600; }
+    .tabla-pedidos td[data-label='Qué pidió'],
+    .tabla-pedidos td[data-label='Acción'] { grid-column: 1 / -1; }
+    .tabla-pedidos td[data-label='Cuándo'] { grid-column: 1 / -1; }
+    .tabla-pedidos .num { text-align: left; }
+    .pedido-cliente { min-width: 0; }
+    .pedido-productos-admin { min-width: 0; }
+    .tabla-pedidos td[data-label='Acción'] .btn-admin { white-space: normal; }
+  }
 </style>
 
 <script>
@@ -120,6 +186,25 @@ try {
       completados = completado ? [...new Set([...completados, id])] : completados.filter((guardado) => guardado !== id);
       localStorage.setItem(claveEstadoPedidos, JSON.stringify(completados));
       actualizarFila(boton, completado);
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('[data-customer-toggle]').forEach((boton) => {
+    const detalles = boton.parentElement?.querySelector<HTMLElement>('[data-customer-details]');
+    const ojoAbierto = boton.querySelector<SVGElement>('[data-eye-open]');
+    const ojoCerrado = boton.querySelector<SVGElement>('[data-eye-closed]');
+    if (!detalles || !ojoAbierto || !ojoCerrado) return;
+    boton.addEventListener('click', () => {
+      const mostrar = detalles.hasAttribute('hidden');
+      detalles.hidden = !mostrar;
+      ojoAbierto.classList.toggle('icono-oculto', mostrar);
+      ojoCerrado.classList.toggle('icono-oculto', !mostrar);
+      boton.setAttribute('aria-expanded', String(mostrar));
+      const etiqueta = mostrar ? 'Ocultar datos del cliente' : 'Mostrar datos del cliente';
+      boton.setAttribute('aria-label', etiqueta);
+      boton.title = etiqueta;
+      const lector = boton.querySelector<HTMLElement>('.solo-lector');
+      if (lector) lector.textContent = etiqueta;
     });
   });
 </script>
