@@ -1,0 +1,125 @@
+---
+// Consulta de pedidos y actualización del estado de preparación (solo administrador).
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import Alert from '../../components/Alert.astro';
+import { graphql } from '../../lib/graphql';
+import { ADMIN_PEDIDOS } from '../../lib/queries';
+import { mensajeError } from '../../lib/admin';
+import { precio } from '../../lib/format';
+import { estadoPedido, formatearFecha } from '../../lib/pagos';
+import type { PedidoAdmin } from '../../types';
+
+const token = Astro.locals.token;
+const aviso = Astro.url.searchParams.get('ok') === 'actualizado' ? 'Estado del pedido actualizado.' : null;
+let pedidos: PedidoAdmin[] = [];
+let error: string | null = null;
+
+try {
+  ({ adminPedidos: pedidos } = await graphql<{ adminPedidos: PedidoAdmin[] }>(ADMIN_PEDIDOS, {}, token));
+} catch (e) {
+  error ??= mensajeError(e);
+}
+---
+
+<AdminLayout titulo="Pedidos" seccion="pedidos">
+  <h2 class="admin-titulo">Pedidos</h2>
+  <p class="admin-subtitulo">Consulta quién realizó cada pedido y actualiza su estado de preparación.</p>
+
+  {aviso && <p class="mensaje-exito" role="status">{aviso}</p>}
+  {error && <Alert>{error}</Alert>}
+
+  {pedidos.length === 0 && !error && <p class="estado-vacio">Todavía no hay pedidos registrados.</p>}
+
+  {pedidos.length > 0 && (
+    <div class="tabla-wrap">
+      <table class="tabla-admin tabla-pedidos">
+        <thead>
+          <tr>
+            <th>Pedido</th>
+            <th>Cliente</th>
+            <th>Fecha</th>
+            <th>Productos</th>
+            <th class="num">Total</th>
+            <th>Pago</th>
+            <th>Preparación</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pedidos.map((pedido) => {
+            const pago = estadoPedido(pedido.status);
+            return (
+              <tr>
+                <td><strong>#{pedido.id}</strong></td>
+                <td>
+                  <strong>{pedido.clienteNombre}</strong>
+                  <br />
+                  <small>{pedido.clienteEmail}</small>
+                </td>
+                <td>{formatearFecha(pedido.fecha)}</td>
+                <td>
+                  <ul class="pedido-productos-admin">
+                    {pedido.productos.map((producto) => (
+                      <li>{producto.cantidad} × {producto.nombre}</li>
+                    ))}
+                  </ul>
+                </td>
+                <td class="num">{precio(pedido.total)}</td>
+                <td><span class={`badge badge-${pago.clase}`}>{pago.etiqueta}</span></td>
+                <td>
+                  <span class="badge badge-warn" data-order-state>No completado</span>
+                </td>
+                <td>
+                  <button class="btn-admin" type="button" data-order-toggle data-order-id={pedido.id} aria-pressed="false">
+                    Marcar completado
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  )}
+</AdminLayout>
+
+<style>
+  .tabla-pedidos { min-width: 920px; }
+  .pedido-productos-admin { margin: 0; padding-left: 1.1rem; min-width: 150px; }
+  .pedido-accion { margin: 0; }
+</style>
+
+<script>
+  const claveEstadoPedidos = 'baking-hub-pedidos-completados';
+  let completados: string[] = [];
+  try {
+    const guardados: unknown = JSON.parse(localStorage.getItem(claveEstadoPedidos) ?? '[]');
+    if (Array.isArray(guardados)) completados = guardados.filter((id): id is string => typeof id === 'string');
+  } catch {
+    completados = [];
+  }
+
+  const actualizarFila = (boton: HTMLButtonElement, completado: boolean) => {
+    const fila = boton.closest('tr');
+    const estado = fila?.querySelector<HTMLElement>('[data-order-state]');
+    if (!estado) return;
+    estado.textContent = completado ? 'Completado' : 'No completado';
+    estado.classList.toggle('badge-ok', completado);
+    estado.classList.toggle('badge-warn', !completado);
+    boton.textContent = completado ? 'Marcar no completado' : 'Marcar completado';
+    boton.classList.toggle('sec', completado);
+    boton.setAttribute('aria-pressed', String(completado));
+  };
+
+  document.querySelectorAll<HTMLButtonElement>('[data-order-toggle]').forEach((boton) => {
+    const id = boton.dataset.orderId;
+    if (!id) return;
+    actualizarFila(boton, completados.includes(id));
+    boton.addEventListener('click', () => {
+      const completado = boton.getAttribute('aria-pressed') !== 'true';
+      completados = completado ? [...new Set([...completados, id])] : completados.filter((guardado) => guardado !== id);
+      localStorage.setItem(claveEstadoPedidos, JSON.stringify(completados));
+      actualizarFila(boton, completado);
+    });
+  });
+</script>

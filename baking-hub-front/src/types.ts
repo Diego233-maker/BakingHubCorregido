@@ -45,6 +45,16 @@ export interface Pedido {
   pagoExpira: string | null;
 }
 
+export interface PedidoAdmin {
+  id: string;
+  total: number;
+  status: string;
+  fecha: string;
+  clienteNombre: string;
+  clienteEmail: string;
+  productos: ItemPedido[];
+}
+
 export interface ConfigPagos {
   /** simulado = no se llama a Mercado Pago · real = pagos reales */
   modo: 'simulado' | 'real';

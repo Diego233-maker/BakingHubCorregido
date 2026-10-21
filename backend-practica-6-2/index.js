@@ -185,6 +185,16 @@ type Pedido {
   pagoExpira: String
 }
 
+type PedidoAdmin {
+  id: ID!
+  total: Float!
+  status: String!
+  fecha: String!
+  clienteNombre: String!
+  clienteEmail: String!
+  productos: [ItemPedido!]!
+}
+
 type ConfigPagos {
   modo: String!
   metodos: [String!]!
@@ -232,6 +242,7 @@ type Query {
   configPagos: ConfigPagos!
 
   adminResumen: ResumenAdmin!
+  adminPedidos: [PedidoAdmin!]!
   adminProductos: [Producto!]!
   adminUsuarios(busqueda: String): [UsuarioAdmin!]!
 }
@@ -517,6 +528,17 @@ const resolvers = {
     },
     configPagos: () => ({ modo: MODO, metodos: METODOS_ACTIVOS, horasParaPagar: HORAS_PARA_PAGAR }),
 
+    adminPedidos: async (_, __, ctx) => {
+      requiereAdmin(ctx);
+      const res = await pool.query(
+        `SELECT p.*, COALESCE(u.nombre, 'Cuenta eliminada') AS cliente_nombre,
+                COALESCE(u.email, 'Sin correo disponible') AS cliente_email
+           FROM pedidos p LEFT JOIN usuarios u ON u.id = p.usuario_id
+          ORDER BY p.fecha DESC, p.id DESC`
+      );
+      return res.rows;
+    },
+
     adminResumen: async (_, __, ctx) => {
       requiereAdmin(ctx);
       const { rows } = await pool.query(
@@ -581,6 +603,21 @@ const resolvers = {
     pagoReferencia: (pedido) => pedido.pago_referencia ?? null,
     pagoUrl: (pedido) => pedido.pago_url ?? null,
     pagoExpira: (pedido) => (pedido.pago_expira ? new Date(pedido.pago_expira).toISOString() : null),
+    productos: async (pedido) => {
+      const res = await pool.query(
+        `SELECT p.id, p.nombre, p.precio, pp.cantidad
+           FROM pedido_productos pp JOIN productos p ON p.id = pp.producto_id
+          WHERE pp.pedido_id = $1 ORDER BY p.id`,
+        [pedido.id]
+      );
+      return res.rows;
+    },
+  },
+
+  PedidoAdmin: {
+    fecha: (pedido) => new Date(pedido.fecha).toISOString(),
+    clienteNombre: (pedido) => pedido.cliente_nombre,
+    clienteEmail: (pedido) => pedido.cliente_email,
     productos: async (pedido) => {
       const res = await pool.query(
         `SELECT p.id, p.nombre, p.precio, pp.cantidad

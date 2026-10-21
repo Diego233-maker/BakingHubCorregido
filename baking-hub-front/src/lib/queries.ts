@@ -78,6 +78,15 @@ export const ADMIN_RESUMEN = `
   }
 `;
 
+export const ADMIN_PEDIDOS = `
+  query AdminPedidos {
+    adminPedidos {
+      id total status fecha clienteNombre clienteEmail
+      productos { id nombre precio cantidad }
+    }
+  }
+`;
+
 export const PEDIDO_PAGADO_SUBSCRIPTION = `
   subscription PedidoPagado {
     pedidoPagado { pedidoId total pagadoEn }
