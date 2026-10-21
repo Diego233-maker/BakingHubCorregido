@@ -31,7 +31,20 @@ try {
   {pedidos.length === 0 && !error && <p class="estado-vacio">Todavía no hay pedidos registrados.</p>}
 
   {pedidos.length > 0 && (
-    <div class="tabla-wrap">
+    <>
+      <div class="pedidos-controles">
+        <div class="filtro-pedidos" role="group" aria-label="Filtrar pedidos por estado de pago">
+          <button type="button" class="filtro-pedido activo" data-order-filter="all" aria-pressed="true">
+            Todos <span>{pedidos.length}</span>
+          </button>
+          <button type="button" class="filtro-pedido" data-order-filter="paid" aria-pressed="false">
+            Pagados <span>{pedidos.filter((pedido) => pedido.status.toLowerCase() === 'pagado').length}</span>
+          </button>
+        </div>
+        <p class="resultado-filtro" data-order-count aria-live="polite">Mostrando {pedidos.length} pedidos</p>
+      </div>
+      <p class="estado-vacio filtro-vacio" data-order-empty hidden>No hay pedidos pagados.</p>
+      <div class="tabla-wrap" data-order-table>
       <table class="tabla-admin tabla-pedidos">
         <thead>
           <tr>
@@ -49,7 +62,7 @@ try {
           {pedidos.map((pedido) => {
             const pago = estadoPedido(pedido.status);
             return (
-              <tr>
+              <tr data-payment-status={pedido.status.toLowerCase()}>
                 <td data-label="Pedido"><strong>#{pedido.id}</strong></td>
                 <td data-label="Cliente">
                   <div class="pedido-cliente">
@@ -100,12 +113,23 @@ try {
           })}
         </tbody>
       </table>
-    </div>
+      </div>
+    </>
   )}
 </AdminLayout>
 
 <style>
+  .pedidos-controles { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: 0 0 0.8rem; }
+  .filtro-pedidos { display: inline-flex; padding: 0.2rem; gap: 0.2rem; border: 1px solid var(--line); border-radius: 8px; background: var(--cream); }
+  .filtro-pedido { display: inline-flex; align-items: center; gap: 0.45rem; border: 0; border-radius: 6px; padding: 0.5rem 0.75rem; background: transparent; color: var(--espresso-soft); font: inherit; font-weight: 600; cursor: pointer; }
+  .filtro-pedido span { display: inline-grid; min-width: 1.35rem; height: 1.35rem; place-items: center; padding: 0 0.25rem; border-radius: 999px; background: var(--surface); font-size: 0.75rem; }
+  .filtro-pedido:hover { color: var(--espresso); }
+  .filtro-pedido.activo { background: var(--surface); color: var(--espresso); box-shadow: 0 1px 3px rgb(45 30 18 / 12%); }
+  .filtro-pedido:focus-visible { outline: 2px solid var(--honey-dark); outline-offset: 2px; }
+  .resultado-filtro { margin: 0; color: var(--espresso-soft); font-size: 0.88rem; }
+  .filtro-vacio { margin: 0 0 1rem; }
   .tabla-pedidos { min-width: 820px; }
+  .tabla-pedidos tr[hidden] { display: none; }
   .pedido-productos-admin { margin: 0; padding-left: 1.1rem; min-width: 150px; }
   .pedido-productos-admin li + li { margin-top: 0.2rem; }
   .pedido-cliente { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.55rem; width: 100%; min-width: 150px; }
@@ -133,6 +157,7 @@ try {
   .pedido-cliente [hidden], .pedido-ojo .icono-oculto { display: none; }
 
   @media (max-width: 760px) {
+    .pedidos-controles { align-items: flex-start; flex-direction: column; gap: 0.55rem; }
     .tabla-wrap { overflow: visible; background: transparent; border: 0; }
     .tabla-pedidos { display: block; min-width: 0; }
     .tabla-pedidos thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
@@ -207,6 +232,35 @@ try {
       boton.title = etiqueta;
       const lector = boton.querySelector<HTMLElement>('.solo-lector');
       if (lector) lector.textContent = etiqueta;
+    });
+  });
+
+  const filtrosPedidos = document.querySelectorAll<HTMLButtonElement>('[data-order-filter]');
+  const filasPedidos = document.querySelectorAll<HTMLTableRowElement>('[data-payment-status]');
+  const mensajeSinResultados = document.querySelector<HTMLElement>('[data-order-empty]');
+  const contadorResultados = document.querySelector<HTMLElement>('[data-order-count]');
+  const tablaPedidos = document.querySelector<HTMLElement>('[data-order-table]');
+
+  filtrosPedidos.forEach((filtro) => {
+    filtro.addEventListener('click', () => {
+      const soloPagados = filtro.dataset.orderFilter === 'paid';
+      let visibles = 0;
+
+      filasPedidos.forEach((fila) => {
+        const coincide = !soloPagados || fila.dataset.paymentStatus === 'pagado';
+        fila.hidden = !coincide;
+        if (coincide) visibles += 1;
+      });
+
+      filtrosPedidos.forEach((opcion) => {
+        const seleccionado = opcion === filtro;
+        opcion.classList.toggle('activo', seleccionado);
+        opcion.setAttribute('aria-pressed', String(seleccionado));
+      });
+
+      if (contadorResultados) contadorResultados.textContent = `Mostrando ${visibles} ${visibles === 1 ? 'pedido' : 'pedidos'}`;
+      if (mensajeSinResultados) mensajeSinResultados.hidden = visibles > 0;
+      if (tablaPedidos) tablaPedidos.hidden = visibles === 0;
     });
   });
 </script>
