@@ -7,7 +7,14 @@ export default defineConfig({
   // Todas las páginas se renderizan en el servidor: necesitamos leer la cookie de sesión.
   // En Netlify el servidor corre como función serverless gracias al adaptador.
   output: 'server',
-  adapter: netlify(),
+  adapter: netlify({
+    // El proyecto no define Edge Functions personalizadas y no necesita su emulador local.
+    devFeatures: {
+      environmentVariables: false,
+      images: true,
+      edgeFunctions: false,
+    },
+  }),
   integrations: [react()],
   vite: {
     server: {
