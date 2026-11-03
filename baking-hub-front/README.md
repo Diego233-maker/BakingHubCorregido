@@ -8,6 +8,9 @@ npm install
 npm run dev            # http://localhost:4321
 ```
 
+El adaptador de Netlify mantiene habilitado el despliegue SSR, pero desactiva la emulación local
+de Edge Functions porque este proyecto no define ninguna. Así, `astro dev` no depende de Deno.
+
 Otros comandos: `npm run check` (tipos), `npm run build`, `npm start` (sirve el build).
 
 ## Estructura
