@@ -21,6 +21,7 @@ try {
 ---
 
 <Layout titulo="Checkout" sidebar>
+  <script is:inline src="https://sdk.mercadopago.com/js/v2" defer></script>
   <h2 class="section-title">Finalizar compra</h2>
   {error && <Alert>No pudimos cargar los métodos de pago: {error}</Alert>}
   {

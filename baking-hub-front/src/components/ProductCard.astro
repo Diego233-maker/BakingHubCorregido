@@ -2,13 +2,23 @@
 import { precio } from '../lib/format';
 import type { Producto } from '../types';
 
-type Props = Producto;
+interface Props extends Producto {
+  prioridad?: boolean;
+}
 
-const { id, nombre, precio: valor, imagen, stock } = Astro.props;
+const { id, nombre, precio: valor, imagen, stock, prioridad = false } = Astro.props;
 ---
 
 <article class="tarjeta-producto">
-  <img src={imagen} alt={nombre} width="190" height="150" loading="lazy" />
+  <img
+    src={imagen}
+    alt={nombre}
+    width="380"
+    height="300"
+    loading={prioridad ? 'eager' : 'lazy'}
+    fetchpriority={prioridad ? 'high' : 'auto'}
+    decoding="async"
+  />
   <div class="tarjeta-producto-info">
     <h3>{nombre}</h3>
     <p class="precio">{precio(valor)}</p>

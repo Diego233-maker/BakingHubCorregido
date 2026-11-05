@@ -1,5 +1,5 @@
 ---
-import CartButton from './CartButton';
+import CartButton from './CartButton.astro';
 
 const { usuario } = Astro.locals;
 const primerNombre = usuario?.nombre.split(' ')[0];
@@ -30,9 +30,7 @@ const primerNombre = usuario?.nombre.split(' ')[0];
       <span>Oscuro</span>
       <span class="theme-switch" aria-hidden="true"><span></span></span>
     </button>
-    <CartButton client:only="react">
-      <a slot="fallback" class="cart-button" href="/carrito">Carrito</a>
-    </CartButton>
+    <CartButton />
   </nav>
 </header>
 

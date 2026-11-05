@@ -7,21 +7,38 @@ import PresenciaUsuario from '../components/PresenciaUsuario';
 
 interface Props {
   titulo?: string;
+  descripcion?: string;
+  imagenSocial?: string;
+  imagenLcp?: string;
   /** Muestra la barra lateral de categorías (páginas de tienda). */
   sidebar?: boolean;
   categoriaActiva?: string;
 }
 
-const { titulo, sidebar = false, categoriaActiva } = Astro.props;
+const { titulo, descripcion, imagenSocial, imagenLcp, sidebar = false, categoriaActiva } = Astro.props;
 const title = titulo ? `${titulo} · Baking Hub` : 'Baking Hub';
+const description = descripcion ?? 'Descubre postres artesanales recién horneados en Baking Hub. Elige tus favoritos y recíbelos en tu punto de entrega.';
+const canonical = new URL(Astro.url.pathname, Astro.url.origin);
+const socialImage = imagenSocial ? new URL(imagenSocial, Astro.url.origin) : new URL('/favicon.svg', Astro.url.origin);
 ---
 
 <!doctype html>
 <html lang="es">
   <head>
-    <script src="https://sdk.mercadopago.com/js/v2" is:inline></script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Baking Hub" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={socialImage} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    {imagenLcp && <link rel="preload" as="image" href={imagenLcp} fetchpriority="high" />}
     <script is:inline>
       const applyStoredTheme = (theme) => {
         document.documentElement.dataset.theme = theme;

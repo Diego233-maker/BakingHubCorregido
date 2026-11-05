@@ -1,0 +1,21 @@
+---
+import { totalArticulos } from '../stores/carrito';
+
+const cantidad = totalArticulos.get();
+---
+
+<a class="cart-button" href="/carrito" aria-live="polite" aria-atomic="true" aria-label={`Carrito, ${cantidad} artículos`}>
+  Carrito (<span data-cart-count>{cantidad}</span>)
+</a>
+
+<script>
+  import { totalArticulos } from '../stores/carrito';
+
+  totalArticulos.subscribe((cantidad) => {
+    document.querySelectorAll<HTMLAnchorElement>('.cart-button[data-cart-count], a.cart-button').forEach((enlace) => {
+      const contador = enlace.querySelector('[data-cart-count]');
+      if (contador) contador.textContent = String(cantidad);
+      enlace.setAttribute('aria-label', `Carrito, ${cantidad} artículos`);
+    });
+  });
+</script>
