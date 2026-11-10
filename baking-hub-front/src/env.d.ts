@@ -3,6 +3,8 @@
 interface ImportMetaEnv {
   /** Clave pública de Mercado Pago (se expone al navegador a propósito; nunca pongas aquí el Access Token). */
   readonly PUBLIC_MP_PUBLIC_KEY?: string;
+  /** Client ID público de Google Identity Services; no es un secreto. */
+  readonly PUBLIC_GOOGLE_CLIENT_ID?: string;
 }
 
 declare namespace App {

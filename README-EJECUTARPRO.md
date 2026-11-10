@@ -41,6 +41,7 @@ Crea un archivo `.env` dentro de la carpeta `baking-hub-front/`:
 GRAPHQL_URL=http://localhost:4000/
 GRAPHQL_WS_URL=ws://localhost:4000/subscriptions
 PUBLIC_MP_PUBLIC_KEY=TEST-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+PUBLIC_GOOGLE_CLIENT_ID=tu-client-id.apps.googleusercontent.com
 ```
 
 > **Nota:** La clave pública debe ser la **Public Key de prueba**
@@ -60,7 +61,19 @@ MP_TEST_PAYER_EMAIL=correo-de-la-cuenta-compradora-de-prueba
 MP_WEBHOOK_SECRET=xxxxxxxxxxxxxxxx
 BACKEND_PUBLIC_URL=https://url-publica-del-backend.example
 FRONTEND_URL=https://url-publica-de-astro.example
+GOOGLE_CLIENT_ID=tu-client-id.apps.googleusercontent.com
+SMTP_USER=tu-cuenta@gmail.com
+SMTP_PASS=tu-contrasena-de-aplicacion
 ```
+
+En Google Cloud crea un cliente OAuth de tipo aplicación web y agrega como orígenes autorizados
+`http://localhost:4321` y el dominio público del frontend. En Gmail utiliza una contraseña de aplicación,
+no la contraseña normal de la cuenta. `GOOGLE_CLIENT_ID`, `SMTP_USER` y `SMTP_PASS` van únicamente en el
+entorno del backend (Render y `.env` local); `PUBLIC_GOOGLE_CLIENT_ID` va en el frontend y Netlify.
+
+El backend agrega automáticamente las columnas nuevas de autenticación en el arranque. En Supabase debes
+cargar `db.sql` una vez para crear las tablas iniciales, pero no necesitas correr manualmente SQL adicional
+para las columnas de verificación y Google. Las cuentas que ya existían quedan verificadas.
 
 `FRONTEND_URL` debe ser la URL HTTPS pública de Astro para que Mercado Pago vuelva al pedido y
 redirija automáticamente después de aprobar el pago. Si ngrok apunta solo al frontend, no uses esa

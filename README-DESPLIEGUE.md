@@ -17,7 +17,8 @@ Haz los pasos **en este orden**, porque cada URL se necesita en el paso siguient
 1. Crea un proyecto en Supabase y guarda la contraseña de la base de datos.
 2. Abre **SQL Editor**, pega todo `backend-practica-6-2/db.sql` y ejecútalo. Crea las tablas, inserta los
    productos de ejemplo y activa RLS (importante: sin RLS la API pública de Supabase podría leer
-   `usuarios.password_hash`).
+   `usuarios.password_hash`). Este SQL inicial sigue siendo necesario para crear las tablas de tienda;
+   las columnas de autenticación por correo y Google se agregan automáticamente al iniciar el backend.
 3. Abre **Connect** y copia la cadena del **Session pooler** (host `...pooler.supabase.com`, puerto `5432`,
    usuario `postgres.<ref>`). Esa es tu `DATABASE_URL`. Usa el pooler, no la "Direct connection":
    la directa solo funciona por IPv6 y Render gratis usa IPv4.
@@ -30,6 +31,8 @@ Haz los pasos **en este orden**, porque cada URL se necesita en el paso siguient
    - `MP_ACCESS_TOKEN`: Access Token de **prueba** (Mercado Pago → tu aplicación → *Pruebas → Credenciales de prueba*). Hoy suele empezar con `APP_USR-`, igual que el de producción: lo que cuenta es de qué sección lo copiaste.
    - `MP_TEST_PAYER_EMAIL`: **opcional**. Déjalo vacío al principio (se cobra con el correo del cliente). Define una cuenta compradora de *Cuentas de prueba* solo si Mercado Pago rechaza al comprador.
    - `ADMIN_EMAIL`: el correo con el que te registrarás como admin.
+   - `GOOGLE_CLIENT_ID`: Client ID de OAuth para una aplicación web de Google Cloud.
+   - `SMTP_USER` y `SMTP_PASS`: Gmail y su contraseña de aplicación para enviar códigos de verificación.
    - `FRONTEND_URL`, `BACKEND_PUBLIC_URL` y `MP_WEBHOOK_SECRET`: déjalas vacías por ahora y vuelve al paso 4
      (`pagos.js` exige `MP_WEBHOOK_SECRET` solo si `BACKEND_PUBLIC_URL` tiene valor).
 3. Cuando termine el deploy, abre `https://TU-SERVICIO.onrender.com/health`. Debe responder `{"ok":true}`.
@@ -46,6 +49,10 @@ Haz los pasos **en este orden**, porque cada URL se necesita en el paso siguient
 > sigue con Checkout Pro. Si algo falla, pon `MP_DEBUG=1` en Render para ver la respuesta completa en los Logs.
 >
 > Mantén **una sola instancia**: la presencia de clientes y las suscripciones viven en la memoria del proceso.
+>
+> Al arrancar, el backend migra las columnas de autenticación en la base indicada por `DATABASE_URL`. El usuario
+> de PostgreSQL debe poder ejecutar `ALTER TABLE` y crear índices. Las cuentas preexistentes quedan verificadas;
+> las cuentas nuevas requieren el código enviado por correo.
 
 ## 3. Netlify (frontend)
 
@@ -58,8 +65,10 @@ Haz los pasos **en este orden**, porque cada URL se necesita en el paso siguient
    | `GRAPHQL_WS_URL` | `wss://TU-SERVICIO.onrender.com/subscriptions` |
    | `SSE_MAX_MS` | `9000` |
    | `PUBLIC_MP_PUBLIC_KEY` | Public Key de **Credenciales de prueba**, de la misma aplicación que el Access Token |
+   | `PUBLIC_GOOGLE_CLIENT_ID` | El mismo Client ID configurado en Render |
 
-   `PUBLIC_MP_PUBLIC_KEY` se incrusta al compilar: si la cambias, hay que volver a desplegar.
+   Las variables `PUBLIC_` se incrustan al compilar: si las cambias, hay que volver a desplegar. En Google Cloud,
+   autoriza `http://localhost:4321` y el origen HTTPS exacto de Netlify como JavaScript origins.
 3. Despliega y anota la URL de Netlify.
 
 ## 4. Cerrar el círculo
@@ -70,7 +79,8 @@ Haz los pasos **en este orden**, porque cada URL se necesita en el paso siguient
    `https://TU-SERVICIO.onrender.com/webhooks/mercadopago` y suscribe el evento **Order (Mercado Pago)**
    (el de *Pagos* solo sirve para la billetera). Copia la clave secreta en `MP_WEBHOOK_SECRET` (Render) y guarda:
    Render redespliega solo.
-3. Regístrate en el sitio con el correo de `ADMIN_EMAIL`: ese usuario obtiene rol `admin`.
+3. Regístrate en el sitio con el correo de `ADMIN_EMAIL`: ese usuario obtiene rol `admin` después de verificar
+   su correo. El acceso con Google verifica automáticamente el correo confirmado por Google.
 
 ## Probar un pago con tarjeta
 

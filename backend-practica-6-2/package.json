@@ -19,11 +19,13 @@
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
+    "google-auth-library": "^11.3.4",
     "graphql": "^16.14.2",
     "graphql-subscriptions": "^3.0.0",
     "graphql-ws": "^5.16.2",
     "jsonwebtoken": "^9.0.3",
     "mercadopago": "^3.6.1",
+    "nodemailer": "^10.5.0",
     "pg": "^8.23.0",
     "ws": "^8.22.0"
   },

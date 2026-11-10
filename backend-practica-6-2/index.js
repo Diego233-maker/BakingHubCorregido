@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { randomInt } from 'node:crypto';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express5';
 import { PubSub } from 'graphql-subscriptions'; // para el pubsub de pedidos pagados
@@ -30,6 +31,42 @@ import {
   idDeNotificacion,
   verificarFirmaWebhook,
 } from './pagos.js';
+import { OAuth2Client } from 'google-auth-library';
+import nodemailer from 'nodemailer';
+const googleClient = process.env.GOOGLE_CLIENT_ID
+  ? new OAuth2Client(process.env.GOOGLE_CLIENT_ID)
+  : null;
+
+async function enviarCodigoVerificacion({ nombre, email, codigo }) {
+  const { SMTP_USER, SMTP_PASS } = process.env;
+  if (!SMTP_USER || !SMTP_PASS) {
+    throw new Error('El envío de correo no está configurado (SMTP_USER/SMTP_PASS).');
+  }
+
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
+  const nombreHtml = nombre.replace(/[&<>"']/g, (caracter) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[caracter]);
+
+  await transporter.sendMail({
+    from: `"Baking Hub" <${SMTP_USER}>`,
+    to: email,
+    subject: 'Verifica tu cuenta en Baking Hub',
+    text: `Hola ${nombre}, tu código de verificación es ${codigo}. Vence en 15 minutos.`,
+    html: `<h2>¡Hola ${nombreHtml}!</h2><p>Tu código de verificación es: <strong>${codigo}</strong></p><p>Vence en 15 minutos.</p>`,
+  });
+}
+
+function generarCodigoVerificacion() {
+  return String(randomInt(100000, 1000000));
+}
 
 const { Pool } = pkg;
 const pubsub = new PubSub(); // para publicar los eventos de pedido pagado a los suscriptores
@@ -95,6 +132,18 @@ try {
     -- Gestión de clientes: una cuenta suspendida no puede iniciar sesión.
     ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS activo BOOLEAN NOT NULL DEFAULT TRUE;
 
+    -- Autenticación por correo y Google. Las cuentas existentes quedan verificadas;
+    -- el registro nuevo establece FALSE explícitamente y debe validar el código.
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email_verificado BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_verificacion VARCHAR(6);
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_verificacion_expira TIMESTAMPTZ;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_verificacion_intentos INT NOT NULL DEFAULT 0;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS codigo_verificacion_enviado TIMESTAMPTZ;
+    ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS google_id VARCHAR(255);
+    ALTER TABLE usuarios ALTER COLUMN password_hash DROP NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS usuarios_google_id_uidx ON usuarios (google_id);
+    UPDATE usuarios SET email_verificado = TRUE WHERE email_verificado IS NULL;
+
     -- Pagos (Mercado Pago): método elegido y datos del cobro.
     ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS metodo_pago VARCHAR(20);
     ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS pago_id VARCHAR(100);
@@ -106,7 +155,8 @@ try {
   `);
 } catch (err) {
   console.error('❌ No se pudo preparar el esquema de la base de datos:', err.message);
-  console.error('   ¿Ya cargaste db.sql? (crea las tablas productos, pedidos y pedido_productos)');
+  console.error('   Revisa que la base de datos exista y que DATABASE_URL tenga permisos para ejecutar ALTER TABLE.');
+  process.exit(1);
 }
 
 const adminEmail = (process.env.ADMIN_EMAIL ?? '').trim().toLowerCase();
@@ -164,6 +214,10 @@ type UsuarioAdmin {
 type AuthPayload {
   token: String!
   usuario: Usuario!
+}
+
+type RegistroPayload {
+  mensaje: String!
 }
 
 type ItemPedido {
@@ -248,8 +302,11 @@ type Query {
 }
 
 type Mutation {
-  registrar(nombre: String!, email: String!, password: String!): AuthPayload!
+  registrar(nombre: String!, email: String!, password: String!): RegistroPayload!
   login(email: String!, password: String!): AuthPayload!
+  verificarCorreo(email: String!, codigo: String!): Boolean!
+  reenviarCodigoVerificacion(email: String!): Boolean!
+  loginConGoogle(idToken: String!): AuthPayload!
 
   crearPedido(productos: [ID!]!, metodoPago: String!, tarjeta: TarjetaInput): Pedido
   simularPago(pedidoId: ID!): Pedido
@@ -264,6 +321,7 @@ type Mutation {
   cambiarEstadoUsuario(id: ID!, activo: Boolean!): UsuarioAdmin
   eliminarUsuario(id: ID!): String
 }
+
 
 type Subscription {
   pedidoPagado: EventoPedidoPagado!
@@ -632,21 +690,38 @@ const resolvers = {
   Mutation: {
     registrar: async (_, args) => {
       const { nombre, email, password } = validarRegistro(args);
-      // Quien se registre con ADMIN_EMAIL obtiene rol admin (regístrate tú primero con ese correo).
-      const esAdmin = process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
+      const emailAdmin = (process.env.ADMIN_EMAIL ?? '').trim().toLowerCase();
+      const esAdmin = Boolean(emailAdmin && email === emailAdmin);
       const hash = await hashPassword(password);
+      const codigo = generarCodigoVerificacion();
       try {
-        const res = await pool.query(
-          `INSERT INTO usuarios (nombre, email, password_hash, rol) VALUES ($1, $2, $3, $4) RETURNING ${USUARIO_PUBLICO}`,
-          [nombre, email, hash, esAdmin ? 'admin' : 'cliente']
+        await pool.query(
+          `INSERT INTO usuarios
+             (nombre, email, password_hash, rol, email_verificado, codigo_verificacion,
+                codigo_verificacion_expira, codigo_verificacion_intentos, codigo_verificacion_enviado)
+             VALUES ($1, $2, $3, $4, FALSE, $5, NOW() + INTERVAL '15 minutes', 0, NULL)`,
+          [nombre, email, hash, esAdmin ? 'admin' : 'cliente', codigo]
         );
-        const usuario = res.rows[0];
-        return { token: firmarToken(usuario), usuario };
       } catch (error) {
         if (error.code === '23505') throw errorDeUsuario('Ese correo ya está registrado');
         console.error('Error al registrar usuario:', error);
         throw new Error('Error al registrar usuario');
       }
+      try {
+        await enviarCodigoVerificacion({ nombre, email, codigo });
+        await pool.query(
+          'UPDATE usuarios SET codigo_verificacion_enviado = NOW() WHERE email = $1 AND codigo_verificacion = $2',
+          [email, codigo]
+        );
+      } catch (error) {
+        console.error('No se pudo enviar el código de verificación:', error);
+        throw new GraphQLError(
+          'La cuenta quedó pendiente de verificación, pero no se pudo enviar el correo. Usa la opción para reenviar el código.',
+          { extensions: { code: 'EMAIL_DELIVERY_FAILED' } }
+        );
+      }
+
+      return { mensaje: 'Te enviamos un código de verificación. Revisa tu correo.' };
     },
 
     login: async (_, { email, password }) => {
@@ -655,14 +730,157 @@ const resolvers = {
       const res = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
       const fila = res.rows[0];
       const passwordOk = await verificarPassword(password, fila?.password_hash);
-      if (!fila || !passwordOk) {
+      if (!fila || !fila.password_hash || !passwordOk) {
         registrarFalloLogin(email);
         throw errorNoAutenticado('Correo o contraseña incorrectos');
       }
       // Se revisa después de la contraseña para no revelar a desconocidos qué correos existen.
       if (!fila.activo) throw errorNoAutenticado('Tu cuenta está suspendida. Contacta a la tienda para reactivarla.');
       fallosLogin.delete(email);
+      if (!fila.email_verificado) {
+        throw new GraphQLError('EMAIL_NOT_VERIFIED', { extensions: { code: 'EMAIL_NOT_VERIFIED' } });
+      }
       const { password_hash, ...usuario } = fila;
+      return { token: firmarToken(usuario), usuario };
+    },
+
+    verificarCorreo: async (_, { email, codigo }) => {
+      const correo = String(email).trim().toLowerCase().slice(0, 254);
+      if (!/^\d{6}$/.test(codigo)) throw errorDeUsuario('El código debe tener 6 dígitos');
+
+      const verificado = await pool.query(
+        `UPDATE usuarios
+            SET email_verificado = TRUE,
+                codigo_verificacion = NULL,
+                codigo_verificacion_expira = NULL,
+                codigo_verificacion_intentos = 0,
+                codigo_verificacion_enviado = NULL
+          WHERE email = $1
+            AND email_verificado = FALSE
+            AND codigo_verificacion = $2
+            AND codigo_verificacion_expira > NOW()
+            AND codigo_verificacion_intentos < 5
+          RETURNING id`,
+        [correo, codigo]
+      );
+      if (verificado.rowCount === 1) return true;
+
+      await pool.query(
+        `UPDATE usuarios
+            SET codigo_verificacion_intentos = codigo_verificacion_intentos + 1,
+                codigo_verificacion = CASE
+                  WHEN codigo_verificacion_intentos >= 4 THEN NULL
+                  ELSE codigo_verificacion
+                END
+          WHERE email = $1
+            AND email_verificado = FALSE
+            AND codigo_verificacion IS NOT NULL
+            AND codigo_verificacion_expira > NOW()
+            AND codigo_verificacion_intentos < 5`,
+        [correo]
+      );
+      throw errorDeUsuario('El código es incorrecto, venció o superó el límite de intentos. Solicita uno nuevo.');
+    },
+
+    reenviarCodigoVerificacion: async (_, { email }) => {
+      const correo = String(email).trim().toLowerCase().slice(0, 254);
+      const codigo = generarCodigoVerificacion();
+      const resultado = await pool.query(
+        `UPDATE usuarios
+            SET codigo_verificacion = $2,
+                codigo_verificacion_expira = NOW() + INTERVAL '15 minutes',
+                codigo_verificacion_intentos = 0,
+                codigo_verificacion_enviado = NOW()
+          WHERE email = $1
+            AND email_verificado = FALSE
+            AND (codigo_verificacion_enviado IS NULL OR codigo_verificacion_enviado < NOW() - INTERVAL '60 seconds')
+          RETURNING nombre, email`,
+        [correo, codigo]
+      );
+      const pendiente = resultado.rows[0];
+      if (pendiente) {
+        try {
+          await enviarCodigoVerificacion({ ...pendiente, codigo });
+        } catch (error) {
+          await pool.query(
+            'UPDATE usuarios SET codigo_verificacion_enviado = NULL WHERE email = $1 AND codigo_verificacion = $2',
+            [correo, codigo]
+          );
+          console.error('No se pudo reenviar el código de verificación:', error);
+          throw new GraphQLError('No se pudo enviar el correo. Inténtalo de nuevo más tarde.', {
+            extensions: { code: 'EMAIL_DELIVERY_FAILED' },
+          });
+        }
+      }
+      return true;
+    },
+
+    loginConGoogle: async (_, { idToken }) => {
+      if (!googleClient) {
+        throw new GraphQLError('El inicio de sesión con Google no está configurado.', {
+          extensions: { code: 'AUTH_PROVIDER_UNAVAILABLE' },
+        });
+      }
+
+      let payload;
+      try {
+        const ticket = await googleClient.verifyIdToken({
+          idToken,
+          audience: process.env.GOOGLE_CLIENT_ID,
+        });
+        payload = ticket.getPayload();
+      } catch {
+        throw errorNoAutenticado('No se pudo validar la cuenta de Google. Inténtalo de nuevo.');
+      }
+
+      if (
+        typeof payload?.sub !== 'string' ||
+        typeof payload.email !== 'string' ||
+        payload.email_verified !== true
+      ) {
+        throw errorNoAutenticado('Google debe confirmar el correo de la cuenta para continuar.');
+      }
+
+      const email = payload.email.trim().toLowerCase();
+      if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw errorNoAutenticado('La cuenta de Google devolvió un correo no válido.');
+      }
+      const googleId = payload.sub;
+      const nombre = (payload.name || email.split('@')[0]).trim().slice(0, 100);
+      const emailAdmin = (process.env.ADMIN_EMAIL ?? '').trim().toLowerCase();
+      const existente = await pool.query('SELECT * FROM usuarios WHERE email = $1', [email]);
+      let usuario;
+
+      if (existente.rows[0]) {
+        const fila = existente.rows[0];
+        if (!fila.activo) throw errorNoAutenticado('Tu cuenta está suspendida. Contacta a la tienda para reactivarla.');
+        if (fila.google_id && fila.google_id !== googleId) {
+          throw errorNoAutenticado('Esta cuenta ya está vinculada con otro perfil de Google.');
+        }
+        const actualizado = await pool.query(
+          `UPDATE usuarios
+              SET google_id = $1,
+                  email_verificado = TRUE,
+                  codigo_verificacion = NULL,
+                  codigo_verificacion_expira = NULL,
+                  codigo_verificacion_intentos = 0,
+                  codigo_verificacion_enviado = NULL,
+                  rol = CASE WHEN $3 <> '' AND lower(email) = $3 THEN 'admin' ELSE rol END
+            WHERE id = $2
+            RETURNING ${USUARIO_PUBLICO}`,
+          [googleId, fila.id, emailAdmin]
+        );
+        usuario = actualizado.rows[0];
+      } else {
+        const nuevo = await pool.query(
+          `INSERT INTO usuarios (nombre, email, password_hash, rol, email_verificado, google_id)
+           VALUES ($1, $2, NULL, $3, TRUE, $4)
+           RETURNING ${USUARIO_PUBLICO}`,
+          [nombre, email, email === emailAdmin && emailAdmin ? 'admin' : 'cliente', googleId]
+        );
+        usuario = nuevo.rows[0];
+      }
+
       return { token: firmarToken(usuario), usuario };
     },
 

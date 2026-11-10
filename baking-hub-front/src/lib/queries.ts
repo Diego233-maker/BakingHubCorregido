@@ -61,9 +61,27 @@ export const LOGIN = `
   }
 `;
 
+export const LOGIN_CON_GOOGLE = `
+  mutation LoginConGoogle($idToken: String!) {
+    loginConGoogle(idToken: $idToken) { token }
+  }
+`;
+
 export const REGISTRAR = `
   mutation Registrar($nombre: String!, $email: String!, $password: String!) {
-    registrar(nombre: $nombre, email: $email, password: $password) { token }
+    registrar(nombre: $nombre, email: $email, password: $password) { mensaje }
+  }
+`;
+
+export const VERIFICAR_CORREO = `
+  mutation VerificarCorreo($email: String!, $codigo: String!) {
+    verificarCorreo(email: $email, codigo: $codigo)
+  }
+`;
+
+export const REENVIAR_CODIGO_VERIFICACION = `
+  mutation ReenviarCodigoVerificacion($email: String!) {
+    reenviarCodigoVerificacion(email: $email)
   }
 `;
 
