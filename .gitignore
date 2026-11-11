@@ -10,5 +10,10 @@ dist/
 **/dist/
 .astro/
 **/.astro/
+__pycache__/
+**/__pycache__/
+*.py[cod]
 *.log
 .DS_Store
+# Local Netlify folder
+.netlify

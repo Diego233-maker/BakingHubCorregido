@@ -12,6 +12,7 @@
 - **Autenticación y autorización:** contraseñas almacenadas mediante hash, sesión basada en JWT y cookie `HttpOnly`.
 - **Checkout:** flujo de compra que requiere autenticación.
 - **Métodos de pago:** integración con Mercado Pago para tarjeta, efectivo en OXXO, transferencia SPEI y billetera de Mercado Pago, según la configuración.
+- **Mapa de entregas:** el administrador marca puntos de entrega en un mapa (Leaflet + OpenStreetMap, sin API key) y el cliente elige uno en el checkout; el pedido guarda una copia de la dirección.
 - **Pedidos:** consulta del historial y del estado de los pedidos.
 - **Inventario:** reserva y devolución de existencias según el estado del pedido.
 - **Panel de administración:** administración de productos, inventario y clientes, además de un resumen de actividad.
@@ -36,6 +37,7 @@
 BakingHubCorregido/
 ├── backend-practica-6-2/   # API GraphQL, lógica de negocio y conexión a PostgreSQL
 ├── baking-hub-front/       # Aplicación web con Astro y React
+├── mcp-baking-hub/         # Servidor MCP local para GitHub Copilot en VS Code
 ├── README.md              # Documentación principal
 ├── README-EJECUTAR.md     # Guía para ejecutar localmente
 ├── README-EJECUTARPRO.md  # Guía alternativa de ejecución
@@ -134,6 +136,12 @@ La arquitectura documentada utiliza los siguientes servicios:
 La configuración del repositorio incluye `render.yaml` y `netlify.toml`. El despliegue requiere configurar las variables de entorno y las URLs de comunicación entre frontend, backend y Mercado Pago.
 
 Consulta la [guía de despliegue](README-DESPLIEGUE.md) antes de publicar la aplicación.
+
+## 🤖 Servidor MCP para GitHub Copilot
+
+El repositorio incluye un servidor MCP local para consultar el catálogo de Baking Hub desde Copilot Chat y, con una cuenta administradora, agregar productos. Cada integrante debe crear su propio entorno Python y configurar sus credenciales en VS Code; no se deben compartir contraseñas ni subir el entorno virtual.
+
+Consulta [`mcp-baking-hub/README.md`](mcp-baking-hub/README.md) para instalar dependencias, iniciar `tienda` y probar sus herramientas, recursos y prompts.
 
 ## 🔐 Consideraciones de seguridad
 

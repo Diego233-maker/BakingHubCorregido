@@ -20,7 +20,13 @@ try {
 if (!producto && !error) return Astro.rewrite('/404');
 ---
 
-<Layout titulo={producto?.nombre} sidebar>
+<Layout
+  titulo={producto?.nombre}
+  descripcion={producto ? `${producto.nombre}: postre artesanal horneado en Baking Hub por ${new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(producto.precio)}.` : undefined}
+  imagenSocial={producto?.imagen}
+  imagenLcp={producto?.imagen}
+  sidebar
+>
   {error && <Alert>Error de conexión: {error}</Alert>}
   {producto && <ProductDetail producto={producto} />}
 </Layout>

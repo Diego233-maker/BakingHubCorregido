@@ -6,10 +6,14 @@ import WhyUs from '../components/WhyUs.astro';
 import Alert from '../components/Alert.astro';
 import { graphql, ApiError } from '../lib/graphql';
 import { OBTENER_MENU } from '../lib/queries';
-import { CATEGORIAS, obtenerCategoria } from '../lib/categorias';
+import { CATEGORIAS } from '../lib/categorias';
 import type { Producto } from '../types';
 
-const categoria = CATEGORIAS.find((c) => c === Astro.url.searchParams.get('categoria')) ?? 'Todas';
+const categoriaSolicitada = CATEGORIAS.find((c) => c === Astro.url.searchParams.get('categoria'));
+if (categoriaSolicitada && categoriaSolicitada !== 'Todas') {
+  return Astro.redirect(`/categoria/${encodeURIComponent(categoriaSolicitada)}`, 301);
+}
+const categoria = 'Todas';
 
 let productos: Producto[] = [];
 let error: string | null = null;
@@ -19,14 +23,19 @@ try {
   error = e instanceof ApiError ? e.message : 'Error inesperado';
 }
 
-const filtrados =
-  categoria === 'Todas' ? productos : productos.filter((p) => obtenerCategoria(p.nombre) === categoria);
+const filtrados = productos;
 ---
 
-<Layout sidebar categoriaActiva={categoria}>
+<Layout
+  titulo={categoria === 'Todas' ? 'Postres artesanales' : `Postres ${categoria}`}
+  descripcion="Explora el catálogo completo de postres artesanales de Baking Hub, horneados con ingredientes seleccionados."
+  imagenLcp={productos[0]?.imagen}
+  sidebar
+  categoriaActiva={categoria}
+>
   {categoria === 'Todas' && <Hero />}
 
-  <h2 class="section-title">Catálogo: {categoria}</h2>
+  {categoria === 'Todas' ? <h2 class="section-title">Catálogo: {categoria}</h2> : <h1 class="section-title">Catálogo: {categoria}</h1>}
 
   {error && <Alert>Error de conexión: {error}</Alert>}
 
@@ -34,7 +43,7 @@ const filtrados =
     !error && (
       <div class="product-grid">
         {filtrados.length === 0 && <p class="estado-vacio">No hay productos en esta categoría.</p>}
-        {filtrados.map((p) => <ProductCard {...p} />)}
+        {filtrados.map((p, index) => <ProductCard {...p} prioridad={index === 0} />)}
       </div>
     )
   }

@@ -5,6 +5,13 @@ interface ImportMetaEnv {
   readonly PUBLIC_MP_PUBLIC_KEY?: string;
   /** Client ID público de Google Identity Services; no es un secreto. */
   readonly PUBLIC_GOOGLE_CLIENT_ID?: string;
+  /** Mapa de entregas (todas opcionales; ver .env.example). */
+  readonly PUBLIC_MAPA_LAT?: string;
+  readonly PUBLIC_MAPA_LNG?: string;
+  readonly PUBLIC_MAPA_ZOOM?: string;
+  readonly PUBLIC_MAPA_TILES_URL?: string;
+  readonly PUBLIC_MAPA_ATTRIBUTION?: string;
+  readonly PUBLIC_MAPA_PAISES?: string;
 }
 
 declare namespace App {

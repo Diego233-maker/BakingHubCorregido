@@ -8,12 +8,29 @@ interface Props {
 }
 
 const { producto } = Astro.props;
+const productUrl = new URL(Astro.url.pathname, Astro.url.origin).toString();
+const productJsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: producto.nombre,
+  image: [producto.imagen],
+  description: `${producto.nombre}, postre artesanal de Baking Hub.`,
+  sku: producto.id,
+  offers: {
+    '@type': 'Offer',
+    url: productUrl,
+    priceCurrency: 'MXN',
+    price: producto.precio,
+    availability: producto.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+  },
+}).replace(/</g, '\\u003c');
 ---
 
+<script type="application/ld+json" set:html={productJsonLd} />
 <div class="detalle-card">
   <a class="volver-btn" href="/">← Volver al catálogo</a>
-  <h2>{producto.nombre}</h2>
-  <img src={producto.imagen} alt={producto.nombre} />
+  <h1>{producto.nombre}</h1>
+  <img src={producto.imagen} alt={producto.nombre} width="720" height="480" loading="eager" fetchpriority="high" />
   <p class="detalle-precio">Precio: {precio(producto.precio)}</p>
   {producto.stock <= 0 && <p class="existencia agotado">Producto agotado por ahora</p>}
   {producto.stock > 0 && producto.stock <= 5 && <p class="existencia pocas">¡Solo quedan {producto.stock} piezas!</p>}
@@ -42,7 +59,7 @@ const { producto } = Astro.props;
 
   .volver-btn:hover { color: var(--espresso); }
 
-  h2 {
+  h1 {
     font-style: italic;
     color: var(--honey-dark);
     font-size: 1.8rem;
